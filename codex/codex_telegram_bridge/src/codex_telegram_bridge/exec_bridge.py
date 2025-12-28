@@ -14,7 +14,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, Optional, Tuple
 
-from bridge_common import (
+from .bridge_common import (
     TelegramClient,
     RouteStore,
     TELEGRAM_HARD_LIMIT,

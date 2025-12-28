@@ -13,7 +13,7 @@ import time
 from queue import Queue, Empty
 from typing import Any, Dict, List, Optional, Tuple
 
-from bridge_common import (
+from .bridge_common import (
     TelegramClient,
     RouteStore,
     config_get,

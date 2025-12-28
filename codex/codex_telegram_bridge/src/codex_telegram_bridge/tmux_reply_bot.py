@@ -9,7 +9,7 @@ import subprocess
 import time
 from typing import Optional
 
-from bridge_common import (
+from .bridge_common import (
     TelegramClient,
     RouteStore,
     config_get,

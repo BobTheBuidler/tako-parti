@@ -9,7 +9,7 @@ import argparse
 import sys
 from typing import Optional
 
-from bridge_common import TelegramClient, RouteStore, config_get, load_telegram_config
+from .bridge_common import TelegramClient, RouteStore, config_get, load_telegram_config
 
 
 def main() -> None:

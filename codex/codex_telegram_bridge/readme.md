@@ -11,7 +11,7 @@ All options store a mapping from `(chat_id, bot_message_id)` to a route so repli
 ## Install
 
 1. Ensure `uv` is installed.
-2. Use the scripts in this folder as-is; `uv run` will install the inline dependencies.
+2. From this folder, run the entrypoints with `uv run` (uses `pyproject.toml` deps).
 3. Put your Telegram credentials in `~/.codex/telegram.toml`.
 
 Example `~/.codex/telegram.toml`:
@@ -35,7 +35,7 @@ Optional keys (by mode):
 Run:
 
 ```bash
-uv run exec_bridge.py
+uv run codex-telegram-exec-bridge
 ```
 
 ## Option 2: MCP server
@@ -43,7 +43,7 @@ uv run exec_bridge.py
 Run:
 
 ```bash
-uv run mcp_bridge.py
+uv run codex-telegram-mcp-bridge
 ```
 
 ## Option 3: tmux
@@ -51,21 +51,21 @@ uv run mcp_bridge.py
 Reply injector:
 
 ```bash
-uv run tmux_reply_bot.py
+uv run codex-telegram-tmux-reply
 ```
 
 Notifier (call from your existing hook):
 
 ```bash
-uv run tmux_notify.py --tmux-target "codex1:0.0" --text "$TURN_TEXT"
+uv run codex-telegram-tmux-notify --tmux-target "codex1:0.0" --text "$TURN_TEXT"
 ```
 
 Add `--chat-id` if `chat_id` is not set in `~/.codex/telegram.toml`.
 
 ## Files
 
-- `bridge_common.py`: shared Telegram client, chunking, and routing store
-- `exec_bridge.py`: codex exec + resume bridge
-- `mcp_bridge.py`: MCP stdio JSON-RPC bridge
-- `tmux_notify.py`: tmux notifier helper
-- `tmux_reply_bot.py`: tmux reply injector
+- `src/codex_telegram_bridge/bridge_common.py`: shared Telegram client, chunking, and routing store
+- `src/codex_telegram_bridge/exec_bridge.py`: codex exec + resume bridge
+- `src/codex_telegram_bridge/mcp_bridge.py`: MCP stdio JSON-RPC bridge
+- `src/codex_telegram_bridge/tmux_notify.py`: tmux notifier helper
+- `src/codex_telegram_bridge/tmux_reply_bot.py`: tmux reply injector
