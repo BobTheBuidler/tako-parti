@@ -13,6 +13,7 @@ from markdown_it import MarkdownIt
 from sulguk import transform_html
 
 CREDS_PATH = Path.home() / ".codex" / "telegram.json"
+ERR_PATH = Path.home() / ".codex" / "telegram_last_error.txt"
 
 
 def main() -> None:
@@ -20,43 +21,51 @@ def main() -> None:
     bot_token = creds["bot_token"]
     chat_id = str(creds["chat_id"])
 
-    payload = json.loads(sys.argv[1])
+    event = json.loads(sys.argv[1])
 
-    md = payload["last-assistant-message"].rstrip()
-    thread_id = payload.get("thread-id")
-    cwd = payload.get("cwd")
-    prompt = (payload.get("input-messages") or [""])[-1].rstrip()
+    md = event["last-assistant-message"].rstrip()
+    thread_id = event.get("thread-id")
+    if thread_id:
+        md += f"\n\nthread: `{thread_id}`"
 
-    footer = "\n".join(
-        line
-        for line in [
-            "---",
-            f"- cwd: `{cwd}`" if cwd else "",
-            f"- thread: `{thread_id}`" if thread_id else "",
-            f"- prompt: `{prompt}`" if prompt else "",
-        ]
-        if line
-    )
+    html = MarkdownIt("commonmark", {"html": False}).render(md)
+    rendered = transform_html(html)
 
-    md_full = md if not footer else f"{md}\n\n{footer}"
+    text = re.sub(r"(?m)^(\s*)•", r"\1-", rendered.text)
 
-    html = MarkdownIt("commonmark", {"html": False}).render(md_full)
-    result = transform_html(html)
+    # FIX: Telegram requires MessageEntity.language (if present) to be a String. :contentReference[oaicite:3]{index=3}
+    entities = []
+    for e in rendered.entities:
+        d = dict(e)
+        if "language" in d and not isinstance(d["language"], str):
+            d.pop("language", None)
+        entities.append(d)
 
-    # Use "-" instead of "•" for list markers (keep offsets stable: 1 char -> 1 char)
-    text = re.sub(r"(?m)^(\s*)• ", r"\1- ", result.text)
-
-    requests.post(
+    r = requests.post(
         f"https://api.telegram.org/bot{bot_token}/sendMessage",
         json={
             "chat_id": chat_id,
             "text": text,
-            "entities": result.entities,
+            "entities": entities,
             "disable_web_page_preview": True,
         },
         timeout=15,
-    ).raise_for_status()
+    )
+
+    try:
+        data = r.json()
+    except Exception:
+        data = {"ok": False, "description": r.text}
+
+    if not (r.status_code == 200 and data.get("ok") is True):
+        ERR_PATH.write_text(
+            f"{r.status_code}\n{data.get('description','')}\n",
+            encoding="utf-8",
+        )
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        pass
