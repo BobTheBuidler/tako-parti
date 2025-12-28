@@ -209,6 +209,7 @@ def render_event_cli(
         _record_item(state, item)
 
         itype = item.get("type")
+        item_num = _extract_numeric_id(item.get("id"), state.last_turn)
 
         if itype == "agent_message" and etype == "item.completed":
             text = item.get("text", "")
@@ -228,13 +229,11 @@ def render_event_cli(
         elif itype == "command_execution":
             command = _format_command(item.get("command", ""))
             if etype == "item.started":
-                lines.append(_with_id(_extract_numeric_id(item.get("id")), f"{STATUS_RUNNING} running: {command}"))
+                lines.append(_with_id(item_num, f"{STATUS_RUNNING} running: {command}"))
             elif etype == "item.completed":
                 exit_code = item.get("exit_code")
                 exit_part = f" (exit {exit_code})" if exit_code is not None else ""
-                lines.append(
-                    _with_id(_extract_numeric_id(item.get(\"id\")), f\"{STATUS_DONE} ran: {command}{exit_part}\")
-                )
+                lines.append(_with_id(item_num, f"{STATUS_DONE} ran: {command}{exit_part}"))
                 if show_output:
                     output = _truncate_output(item.get("aggregated_output", ""))
                     if output:
@@ -242,24 +241,22 @@ def render_event_cli(
 
         elif itype == "file_change" and etype == "item.completed":
             line = _format_file_change(item.get("changes", []))
-            lines.append(_with_id(_extract_numeric_id(item.get(\"id\")), f\"{STATUS_DONE} {line}\"))
+            lines.append(_with_id(item_num, f"{STATUS_DONE} {line}"))
 
         elif itype == "mcp_tool_call":
             name = _format_tool_call(item.get("server", ""), item.get("tool", ""))
             if etype == "item.started":
-                lines.append(
-                    _with_id(_extract_numeric_id(item.get(\"id\")), f\"{STATUS_RUNNING} tool: {name}\")
-                )
+                lines.append(_with_id(item_num, f"{STATUS_RUNNING} tool: {name}"))
             elif etype == "item.completed":
-                lines.append(_with_id(_extract_numeric_id(item.get(\"id\")), f\"{STATUS_DONE} tool: {name}\"))
+                lines.append(_with_id(item_num, f"{STATUS_DONE} tool: {name}"))
 
         elif itype == "web_search" and etype == "item.completed":
             query = _format_query(item.get("query", ""))
-            lines.append(_with_id(_extract_numeric_id(item.get(\"id\")), f\"{STATUS_DONE} searched: {query}\"))
+            lines.append(_with_id(item_num, f"{STATUS_DONE} searched: {query}"))
 
         elif itype == "error" and etype == "item.completed":
             warning = _truncate(item.get("message", ""), 120)
-            lines.append(_with_id(_extract_numeric_id(item.get(\"id\")), f\"{STATUS_DONE} warning: {warning}\"))
+            lines.append(_with_id(item_num, f"{STATUS_DONE} warning: {warning}"))
 
     return lines
 
