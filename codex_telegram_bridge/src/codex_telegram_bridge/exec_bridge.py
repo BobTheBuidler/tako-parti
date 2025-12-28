@@ -334,6 +334,11 @@ def run(
         "--workdir",
         help="Override codex workspace (--cd) for this exec-bridge run.",
     ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        help="Codex model to pass to `codex exec`.",
+    ),
 ) -> None:
     setup_file_logger(log_file if log_file else None)
     config = load_telegram_config()
@@ -353,6 +358,25 @@ def run(
         extra_args = [str(v) for v in raw_exec_args]
     else:
         extra_args = shlex.split(str(raw_exec_args))  # e.g. "--full-auto --search"
+
+    def _strip_model_args(args: list[str]) -> list[str]:
+        stripped: list[str] = []
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg in ("--model", "-m"):
+                i += 2
+                continue
+            if arg.startswith("--model=") or arg.startswith("-m="):
+                i += 1
+                continue
+            stripped.append(arg)
+            i += 1
+        return stripped
+
+    if model:
+        extra_args = _strip_model_args(extra_args)
+        extra_args.extend(["--model", model])
 
     def _has_notify_override(args: list[str]) -> bool:
         for i, arg in enumerate(args):

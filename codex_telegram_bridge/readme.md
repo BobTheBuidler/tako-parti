@@ -47,6 +47,7 @@ Optional flags:
 - `--codex-command-timeout FLOAT` (default: disabled, debug defaults to 60s)
 - `--codex-no-child-timeout FLOAT` (default `15.0`, set `0` to disable)
 - `--workdir PATH` (override `codex_workspace`)
+- `--model NAME` (pass through to `codex exec`)
 
 ## Option 2: MCP server
 
