@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 from collections import deque
 from dataclasses import dataclass, field
@@ -21,7 +20,7 @@ MAX_PROGRESS_CHARS = 300
 
 
 def _one_line(text: str) -> str:
-    return " ".join((text or "").split())
+    return " ".join(text.split())
 
 
 def _truncate(text: str, max_len: int) -> str:
@@ -114,21 +113,12 @@ def _with_id(item_id: Optional[int], line: str) -> str:
 
 
 def _truncate_output(text: str, max_lines: int = 20, max_chars: int = 4000) -> str:
-    if not text:
-        return ""
     if len(text) > max_chars:
         text = text[-max_chars:]
     lines = text.splitlines()
     if len(lines) > max_lines:
         lines = ["..."] + lines[-max_lines:]
     return "\n".join(lines)
-
-
-def _maybe_parse_json(text: str) -> Optional[Any]:
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        return None
 
 
 @dataclass
@@ -142,11 +132,9 @@ class ExecRenderState:
 
 
 def _record_item(state: ExecRenderState, item: dict[str, Any]) -> None:
-    item_id = item.get("id")
-    if isinstance(item_id, (int, str)):
-        numeric_id = _extract_numeric_id(item_id)
-        if numeric_id is not None:
-            state.last_turn = numeric_id
+    numeric_id = _extract_numeric_id(item["id"])
+    if numeric_id is not None:
+        state.last_turn = numeric_id
 
 
 def _set_current_action(state: ExecRenderState, item_id: Optional[int], line: str) -> bool:
@@ -186,7 +174,7 @@ def render_event_cli(
     *,
     show_output: bool = False,
 ) -> list[str]:
-    etype = event.get("type")
+    etype = event["type"]
     lines: list[str] = []
 
     if etype == "thread.started":
@@ -199,59 +187,53 @@ def render_event_cli(
         return ["turn completed"]
 
     if etype == "turn.failed":
-        error = event.get("error", {}).get("message", "")
+        error = event["error"]["message"]
         return [f"turn failed: {error}"]
 
     if etype == "error":
-        return [f"stream error: {event.get('message', '')}"]
+        return [f"stream error: {event['message']}"]
 
     if etype in {"item.started", "item.updated", "item.completed"}:
-        item = event.get("item", {}) or {}
+        item = event["item"]
         _record_item(state, item)
 
-        itype = item.get("type")
-        item_num = _extract_numeric_id(item.get("id"), state.last_turn)
+        itype = item["type"]
+        item_num = _extract_numeric_id(item["id"], state.last_turn)
 
         if itype == "agent_message" and etype == "item.completed":
-            text = item.get("text", "")
-            parsed = _maybe_parse_json(text)
-            if parsed is not None:
-                lines.append("assistant (json):")
-                lines.extend(indent(json.dumps(parsed, indent=2), "  ").splitlines())
-            else:
-                lines.append("assistant:")
-                lines.extend(indent(text, "  ").splitlines() if text else ["  (empty)"])
+            lines.append("assistant:")
+            lines.extend(indent(item["text"], "  ").splitlines())
 
         elif itype == "command_execution":
-            command = _format_command(item.get("command", ""))
+            command = _format_command(item["command"])
             if etype == "item.started":
                 lines.append(_with_id(item_num, f"{STATUS_RUNNING} running: {command}"))
             elif etype == "item.completed":
-                exit_code = item.get("exit_code")
+                exit_code = item["exit_code"]
                 exit_part = f" (exit {exit_code})" if exit_code is not None else ""
                 lines.append(_with_id(item_num, f"{STATUS_DONE} ran: {command}{exit_part}"))
                 if show_output:
-                    output = _truncate_output(item.get("aggregated_output", ""))
+                    output = _truncate_output(item["aggregated_output"])
                     if output:
                         lines.extend(indent(output, "  ").splitlines())
 
         elif itype == "file_change" and etype == "item.completed":
-            line = _format_file_change(item.get("changes", []))
+            line = _format_file_change(item["changes"])
             lines.append(_with_id(item_num, f"{STATUS_DONE} {line}"))
 
         elif itype == "mcp_tool_call":
-            name = _format_tool_call(item.get("server", ""), item.get("tool", ""))
+            name = _format_tool_call(item["server"], item["tool"])
             if etype == "item.started":
                 lines.append(_with_id(item_num, f"{STATUS_RUNNING} tool: {name}"))
             elif etype == "item.completed":
                 lines.append(_with_id(item_num, f"{STATUS_DONE} tool: {name}"))
 
         elif itype == "web_search" and etype == "item.completed":
-            query = _format_query(item.get("query", ""))
+            query = _format_query(item["query"])
             lines.append(_with_id(item_num, f"{STATUS_DONE} searched: {query}"))
 
         elif itype == "error" and etype == "item.completed":
-            warning = _truncate(item.get("message", ""), 120)
+            warning = _truncate(item["message"], 120)
             lines.append(_with_id(item_num, f"{STATUS_DONE} warning: {warning}"))
 
     return lines
@@ -264,20 +246,20 @@ class ExecProgressRenderer:
         self.max_chars = max_chars
 
     def note_event(self, event: dict[str, Any]) -> bool:
-        etype = event.get("type")
+        etype = event["type"]
         changed = False
 
         if etype in {"thread.started", "turn.started"}:
             return True
 
         if etype in {"item.started", "item.updated", "item.completed"}:
-            item = event.get("item", {}) or {}
+            item = event["item"]
             _record_item(self.state, item)
-            itype = item.get("type")
-            item_id = _extract_numeric_id(item.get("id"), self.state.last_turn)
+            itype = item["type"]
+            item_id = _extract_numeric_id(item["id"], self.state.last_turn)
 
             if itype == "reasoning":
-                reasoning = _format_reasoning(item.get("text", ""))
+                reasoning = _format_reasoning(item["text"])
                 if reasoning:
                     reasoning_line = _with_id(item_id, reasoning)
                     if self.state.current_action and not self.state.current_reasoning:
@@ -288,19 +270,19 @@ class ExecProgressRenderer:
                 return changed
 
             if itype == "command_execution":
-                command = _format_command(item.get("command", ""))
+                command = _format_command(item["command"])
                 if etype == "item.started":
                     line = _with_id(item_id, f"{STATUS_RUNNING} running: {command}")
                     changed = _set_current_action(self.state, item_id, line) or changed
                 elif etype == "item.completed":
-                    exit_code = item.get("exit_code")
+                    exit_code = item["exit_code"]
                     exit_part = f" (exit {exit_code})" if exit_code is not None else ""
                     line = _with_id(item_id, f"{STATUS_DONE} ran: {command}{exit_part}")
                     changed = _complete_action(self.state, item_id, line) or changed
                 return changed
 
             if itype == "mcp_tool_call":
-                name = _format_tool_call(item.get("server", ""), item.get("tool", ""))
+                name = _format_tool_call(item["server"], item["tool"])
                 if etype == "item.started":
                     line = _with_id(item_id, f"{STATUS_RUNNING} tool: {name}")
                     changed = _set_current_action(self.state, item_id, line) or changed
@@ -310,16 +292,16 @@ class ExecProgressRenderer:
                 return changed
 
             if itype == "web_search" and etype == "item.completed":
-                query = _format_query(item.get("query", ""))
+                query = _format_query(item["query"])
                 line = _with_id(item_id, f"{STATUS_DONE} searched: {query}")
                 return _complete_action(self.state, item_id, line) or changed
 
             if itype == "file_change" and etype == "item.completed":
-                line = _with_id(item_id, f"{STATUS_DONE} {_format_file_change(item.get('changes', []))}")
+                line = _with_id(item_id, f"{STATUS_DONE} {_format_file_change(item['changes'])}")
                 return _complete_action(self.state, item_id, line) or changed
 
             if itype == "error" and etype == "item.completed":
-                warning = _truncate(item.get("message", ""), 120)
+                warning = _truncate(item["message"], 120)
                 line = _with_id(item_id, f"{STATUS_DONE} warning: {warning}")
                 return _complete_action(self.state, item_id, line) or changed
 
