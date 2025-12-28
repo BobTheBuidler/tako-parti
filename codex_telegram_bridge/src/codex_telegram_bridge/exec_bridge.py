@@ -330,6 +330,16 @@ def run(
     offset: Optional[int] = None
     ignore_backlog = bool(ignore_backlog)
 
+    if ignore_backlog:
+        try:
+            updates = bot.get_updates(offset=offset, timeout_s=0, allowed_updates=["message"])
+        except Exception as e:
+            log(f"[startup] backlog drain failed: {e}")
+            updates = []
+        if updates:
+            offset = updates[-1]["update_id"] + 1
+            log(f"[startup] drained {len(updates)} pending update(s)")
+
     log(f"[startup] pwd={startup_pwd}")
     log("Option1 bridge running (codex exec). Long-polling Telegram...")
     if startup_ids:
@@ -483,13 +493,6 @@ def run(
             log(f"[telegram] get_updates error: {e}")
             time.sleep(2.0)
             continue
-
-        if ignore_backlog:
-            if updates:
-                offset = updates[-1]["update_id"] + 1
-                log(f"[startup] drained {len(updates)} pending update(s)")
-                continue
-            ignore_backlog = False
 
         for upd in updates:
             offset = upd["update_id"] + 1
