@@ -1,4 +1,4 @@
-# Takopi
+# takopi
 
 > 🐙 A little helper from Happy Planet, here to make your Codex sessions happier-pi!
 
@@ -55,7 +55,7 @@ Create a Codex profile in `~/.codex/config.toml`:
 model = "gpt-4.1"
 ```
 
-Then run Takopi with:
+Then run takopi with:
 
 ```bash
 uv run takopi --profile takopi

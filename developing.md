@@ -29,7 +29,7 @@ The orchestrator module containing:
   queue per bot token; updates are confirmed when a client requests a higher `offset`, so
   multiple instances with the same token will race (duplicates and/or missed updates)
 
-### `telegram_client.py` — Telegram Bot API
+### `telegram.py` — Telegram Bot API
 
 Minimal async client wrapping the Bot API:
 

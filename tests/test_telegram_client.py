@@ -5,7 +5,7 @@ import httpx
 import pytest
 
 from takopi.logging import RedactTokenFilter
-from takopi.telegram_client import TelegramClient
+from takopi.telegram import TelegramClient
 
 
 def test_telegram_429_retry_after_calls_sleep() -> None:

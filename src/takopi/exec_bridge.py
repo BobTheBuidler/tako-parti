@@ -22,7 +22,7 @@ from .config import ConfigError, load_telegram_config
 from .exec_render import ExecProgressRenderer, render_event_cli, render_markdown
 from .logging import setup_logging
 from .onboarding import check_setup, render_setup_guide
-from .telegram_client import TelegramClient
+from .telegram import TelegramClient
 
 logger = logging.getLogger(__name__)
 UUID_PATTERN_TEXT = r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b"
