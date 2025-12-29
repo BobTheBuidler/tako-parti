@@ -21,7 +21,7 @@ from .config import ConfigError, load_telegram_config
 from .exec_render import ExecProgressRenderer, render_event_cli
 from .logging import setup_logging
 from .rendering import render_markdown
-from .onboarding import check_setup, demo_results, render_setup_guide
+from .onboarding import check_setup, render_setup_guide
 from .telegram_client import TelegramClient
 
 logger = logging.getLogger(__name__)
@@ -678,20 +678,8 @@ def run(
         "--profile",
         help="Codex profile name to pass to `codex --profile`.",
     ),
-    setup_demo: bool = typer.Option(
-        False,
-        "--setup-demo",
-        help="Render all onboarding guide variants and exit.",
-    ),
 ) -> None:
     setup_logging(debug=debug)
-    if setup_demo:
-        for idx, (label, result) in enumerate(demo_results()):
-            if idx:
-                typer.echo("", err=True)
-            typer.echo(f"[setup demo] {label}", err=True)
-            render_setup_guide(result)
-        raise typer.Exit(code=0)
     setup = check_setup()
     if not setup.ok:
         render_setup_guide(setup)

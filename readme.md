@@ -74,7 +74,6 @@ uv run takopi
 | `--final-notify` / `--no-final-notify` | `--final-notify` | Send final response as new message (vs. edit) |
 | `--debug` / `--no-debug` | `--no-debug` | Enable verbose logging |
 | `--profile NAME` | (codex default) | Codex profile name |
-| `--setup-demo` | off | Render all onboarding guide variants and exit |
 
 ## Usage
 
