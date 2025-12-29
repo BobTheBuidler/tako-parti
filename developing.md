@@ -25,6 +25,9 @@ The orchestrator module containing:
 - `asyncio.TaskGroup` manages per-message tasks
 - Progress edits are throttled to ~2s intervals
 - Subprocess stderr is drained to a bounded deque for error reporting
+- `poll_updates()` uses Telegram `getUpdates` long-polling with a single server-side updates
+  queue per bot token; updates are confirmed when a client requests a higher `offset`, so
+  multiple instances with the same token will race (duplicates and/or missed updates)
 
 ### `telegram_client.py` — Telegram Bot API
 

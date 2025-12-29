@@ -104,6 +104,18 @@ resume: `019b66fc-64c2-7a71-81cd-081c504cfeb2`
 - **Notifications**: Codex's built-in notify is disabled (bridge handles it)
 - **Filtering**: Only accepts messages where chat ID equals sender ID and matches `chat_id`
 
+## Operational Notes
+
+### Single consumer: do not run multiple instances per bot token
+
+Run exactly one instance per bot token.
+
+This bridge uses Telegram's `getUpdates` long-polling. Telegram stores incoming updates in a
+single queue per bot and considers an update confirmed once a client calls `getUpdates` with an
+`offset` higher than the update's `update_id` (see the [Telegram Bot API](https://core.telegram.org/bots/api)).
+Running two bridge processes with the same bot token will cause them to compete for updates
+(duplicates and/or missed messages).
+
 ## Development
 
 See [`developing.md`](developing.md) for architecture details.
