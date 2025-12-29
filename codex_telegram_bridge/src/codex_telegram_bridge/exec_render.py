@@ -11,7 +11,7 @@ STATUS_DONE = "✓"
 HEADER_SEP = " · "
 HARD_BREAK = "  \n"
 
-MAX_CMD_LEN = 40
+MAX_PROGRESS_CMD_LEN = 300
 MAX_QUERY_LEN = 60
 MAX_PATH_LEN = 40
 MAX_PROGRESS_CHARS = 300
@@ -64,6 +64,8 @@ def _shorten_path(path: str, width: int) -> str:
 def format_event(
     event: dict[str, Any],
     last_item: int | None,
+    *,
+    command_width: int | None = None,
 ) -> tuple[int | None, list[str], str | None, str | None]:
     """
     Returns (new_last_item, cli_lines, progress_line, progress_prefix).
@@ -95,14 +97,22 @@ def format_event(
                     lines.extend(indent(item["text"], "  ").splitlines())
                     return last_item, lines, None, None
                 case ("reasoning", "item.completed"):
-                    line = prefix + item["text"]
+                    text = item.get("text") or ""
+                    first_line = text.splitlines()[0] if text else ""
+                    line = prefix + first_line
                     return last_item, [line], line, prefix
                 case ("command_execution", "item.started"):
-                    command = f"`{_shorten(item['command'], MAX_CMD_LEN)}`"
+                    command = item["command"]
+                    if command_width is not None:
+                        command = _shorten(command, command_width)
+                    command = f"`{command}`"
                     line = prefix + f"{STATUS_RUNNING} running: {command}"
                     return last_item, [line], line, prefix
                 case ("command_execution", "item.completed"):
-                    command = f"`{_shorten(item['command'], MAX_CMD_LEN)}`"
+                    command = item["command"]
+                    if command_width is not None:
+                        command = _shorten(command, command_width)
+                    command = f"`{command}`"
                     exit_code = item["exit_code"]
                     exit_part = f" (exit {exit_code})" if exit_code is not None else ""
                     line = prefix + f"{STATUS_DONE} ran: {command}{exit_part}"
@@ -143,14 +153,20 @@ def format_event(
 def render_event_cli(
     event: dict[str, Any], last_item: int | None = None
 ) -> tuple[int | None, list[str]]:
-    last_item, cli_lines, _, _ = format_event(event, last_item)
+    last_item, cli_lines, _, _ = format_event(event, last_item, command_width=None)
     return last_item, cli_lines
 
 
 class ExecProgressRenderer:
-    def __init__(self, max_actions: int = 5, max_chars: int = MAX_PROGRESS_CHARS) -> None:
+    def __init__(
+        self,
+        max_actions: int = 5,
+        max_chars: int = MAX_PROGRESS_CHARS,
+        command_width: int | None = MAX_PROGRESS_CMD_LEN,
+    ) -> None:
         self.max_actions = max_actions
         self.max_chars = max_chars
+        self.command_width = command_width
         self.recent_actions: deque[str] = deque(maxlen=max_actions)
         self.turn_count: int | None = None
         self.last_item: int | None = None
@@ -162,7 +178,9 @@ class ExecProgressRenderer:
             self.turn_count = 1 if self.turn_count is None else self.turn_count + 1
             return True
 
-        self.last_item, _, progress_line, progress_prefix = format_event(event, self.last_item)
+        self.last_item, _, progress_line, progress_prefix = format_event(
+            event, self.last_item, command_width=self.command_width
+        )
         if progress_line is None:
             return False
 

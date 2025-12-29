@@ -24,11 +24,13 @@ class TelegramClient:
 
     async def _post(self, method: str, json_data: dict[str, Any]) -> Any:
         try:
+            logger.debug("[telegram] request %s: %s", method, json_data)
             resp = await self._client.post(f"{self._base}/{method}", json=json_data)
             resp.raise_for_status()
             payload = resp.json()
             if not payload.get("ok"):
                 raise RuntimeError(f"Telegram API error: {payload}")
+            logger.debug("[telegram] response %s: %s", method, payload)
             return payload["result"]
         except httpx.HTTPError as e:
             logger.error("Telegram network error: %s", e)

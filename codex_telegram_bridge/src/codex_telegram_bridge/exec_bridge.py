@@ -53,7 +53,7 @@ async def _drain_stderr(stderr: asyncio.StreamReader | None, tail: deque[str]) -
         logger.debug("[codex][stderr] drain error: %s", e)
 
 
-def setup_logging(log_file: str | None) -> None:
+def setup_logging(log_file: str | None, *, debug: bool = False) -> None:
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.DEBUG)
     for handler in root_logger.handlers[:]:
@@ -63,7 +63,7 @@ def setup_logging(log_file: str | None) -> None:
     fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
 
     console = logging.StreamHandler(sys.stdout)
-    console.setLevel(logging.INFO)
+    console.setLevel(logging.DEBUG if debug else logging.INFO)
     console.setFormatter(fmt)
     root_logger.addHandler(console)
 
@@ -74,7 +74,7 @@ def setup_logging(log_file: str | None) -> None:
             backupCount=3,
             encoding="utf-8",
         )
-        file_handler.setLevel(logging.DEBUG)
+        file_handler.setLevel(logging.DEBUG if debug else logging.INFO)
         file_handler.setFormatter(fmt)
         root_logger.addHandler(file_handler)
         logger.debug("[debug] file logger initialized path=%r", log_file)
@@ -169,7 +169,10 @@ class CodexExecRunner:
     """
 
     def __init__(
-        self, codex_cmd: str, workspace: str | None, extra_args: list[str]
+        self,
+        codex_cmd: str,
+        workspace: str | None,
+        extra_args: list[str],
     ) -> None:
         self.codex_cmd = codex_cmd
         self.workspace = workspace
@@ -196,6 +199,7 @@ class CodexExecRunner:
         logger.info(
             "[codex] start run session_id=%r workspace=%r", session_id, self.workspace
         )
+        logger.debug("[codex] prompt: %s", prompt)
         args = [self.codex_cmd, "exec", "--json"]
         args.extend(self.extra_args)
         if self.workspace:
@@ -233,12 +237,15 @@ class CodexExecRunner:
             proc.stdin.close()
 
             async for raw_line in proc.stdout:
-                line = raw_line.decode(errors="replace").strip()
+                raw = raw_line.decode(errors="replace")
+                logger.debug("[codex][jsonl] %s", raw.rstrip("\n"))
+                line = raw.strip()
                 if not line:
                     continue
                 try:
                     evt = json.loads(line)
                 except json.JSONDecodeError:
+                    logger.debug("[codex][jsonl] invalid line: %r", line)
                     continue
 
                 cli_last_turn, out_lines = render_event_cli(evt, cli_last_turn)
@@ -400,6 +407,7 @@ def _parse_bridge_config(
 
 async def _send_startup(cfg: BridgeConfig) -> None:
     try:
+        logger.debug("[startup] message: %s", cfg.startup_msg)
         await cfg.bot.send_message(chat_id=cfg.chat_id, text=cfg.startup_msg)
         logger.info("[startup] sent startup message to chat_id=%s", cfg.chat_id)
     except Exception as e:
@@ -418,6 +426,7 @@ async def _drain_backlog(cfg: BridgeConfig, offset: int | None) -> int | None:
     except Exception as e:
         logger.info("[startup] backlog drain failed: %s", e)
         return offset
+    logger.debug("[startup] backlog updates: %s", updates)
     if updates:
         offset = updates[-1]["update_id"] + 1
         logger.info("[startup] drained %s pending update(s)", len(updates))
@@ -433,6 +442,13 @@ async def _handle_message(
     text: str,
     resume_session: str | None,
 ) -> None:
+    logger.debug(
+        "[handle] incoming chat_id=%s message_id=%s resume=%r text=%s",
+        chat_id,
+        user_msg_id,
+        resume_session,
+        text,
+    )
     started_at = time.monotonic()
     progress_renderer = ExecProgressRenderer(max_actions=5)
 
@@ -445,6 +461,13 @@ async def _handle_message(
         if progress_id is None:
             return
         rendered, entities = render_for_telegram(md, limit=TELEGRAM_TEXT_LIMIT)
+        logger.debug(
+            "[progress] edit message_id=%s md=%s rendered=%s entities=%s",
+            progress_id,
+            md,
+            rendered,
+            entities,
+        )
         try:
             await cfg.bot.edit_message_text(
                 chat_id=chat_id,
@@ -464,6 +487,13 @@ async def _handle_message(
         initial_md = progress_renderer.render_progress(0.0)
         initial_rendered, initial_entities = render_for_telegram(
             initial_md, limit=TELEGRAM_TEXT_LIMIT
+        )
+        logger.debug(
+            "[progress] send reply_to=%s md=%s rendered=%s entities=%s",
+            user_msg_id,
+            initial_md,
+            initial_rendered,
+            initial_entities,
         )
         progress_msg = await cfg.bot.send_message(
             chat_id=chat_id,
@@ -509,12 +539,18 @@ async def _handle_message(
             err = _clamp_tg_text(f"Error:\n{e}")
             if progress_id is not None and len(err) <= TELEGRAM_TEXT_LIMIT:
                 try:
+                    logger.debug(
+                        "[error] edit message_id=%s text=%s", progress_id, err
+                    )
                     await cfg.bot.edit_message_text(
                         chat_id=chat_id, message_id=progress_id, text=err
                     )
                     return
                 except Exception:
                     pass
+            logger.debug(
+                "[error] send reply_to=%s text=%s", user_msg_id, err
+            )
             await _send_markdown(
                 cfg.bot,
                 chat_id=chat_id,
@@ -534,10 +570,17 @@ async def _handle_message(
         progress_renderer.render_final(elapsed, answer, status=status)
         + f"\n\nresume: `{session_id}`"
     )
+    logger.debug("[final] markdown: %s", final_md)
     final_rendered, final_entities = render_markdown(final_md)
     can_edit_final = progress_id is not None and len(final_rendered) <= TELEGRAM_TEXT_LIMIT
 
     if cfg.final_notify or not can_edit_final:
+        logger.debug(
+            "[final] send reply_to=%s rendered=%s entities=%s",
+            user_msg_id,
+            final_rendered,
+            final_entities,
+        )
         await _send_markdown(
             cfg.bot,
             chat_id=chat_id,
@@ -547,10 +590,17 @@ async def _handle_message(
         )
         if progress_id is not None:
             try:
+                logger.debug("[final] delete progress message_id=%s", progress_id)
                 await cfg.bot.delete_message(chat_id=chat_id, message_id=progress_id)
             except Exception:
                 pass
     else:
+        logger.debug(
+            "[final] edit message_id=%s rendered=%s entities=%s",
+            progress_id,
+            final_rendered,
+            final_entities,
+        )
         await cfg.bot.edit_message_text(
             chat_id=chat_id,
             message_id=progress_id,
@@ -587,6 +637,7 @@ async def _run_main_loop(cfg: BridgeConfig) -> None:
                 logger.info("[loop] getUpdates failed: %s", e)
                 await asyncio.sleep(2)
                 continue
+            logger.debug("[loop] updates: %s", updates)
 
             for upd in updates:
                 offset = upd["update_id"] + 1
@@ -646,6 +697,11 @@ def run(
         "--ignore-backlog/--process-backlog",
         help="Skip pending Telegram updates that arrived before startup.",
     ),
+    debug: bool = typer.Option(
+        False,
+        "--debug/--no-debug",
+        help="Log codex JSONL, Telegram requests, and rendered messages.",
+    ),
     log_file: str | None = typer.Option(
         "exec_bridge.log",
         "--log-file",
@@ -662,7 +718,7 @@ def run(
         help="Codex model to pass to `codex exec`.",
     ),
 ) -> None:
-    setup_logging(log_file if log_file else None)
+    setup_logging(log_file if log_file else None, debug=debug)
     cfg = _parse_bridge_config(
         progress_edit_every_s=progress_edit_every_s,
         progress_silent=progress_silent,
