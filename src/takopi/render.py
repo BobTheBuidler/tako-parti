@@ -23,6 +23,9 @@ HARD_BREAK = "  \n"
 MAX_PROGRESS_CMD_LEN = 300
 MAX_FILE_CHANGES_INLINE = 3
 
+_MD_RENDERER = MarkdownIt("commonmark", {"html": False})
+_BULLET_RE = re.compile(r"(?m)^(\s*)•")
+
 
 @dataclass(frozen=True)
 class MarkdownParts:
@@ -38,11 +41,10 @@ def assemble_markdown_parts(parts: MarkdownParts) -> str:
 
 
 def render_markdown(md: str) -> tuple[str, list[dict[str, Any]]]:
-    md_renderer = MarkdownIt("commonmark", {"html": False})
-    html = md_renderer.render(md or "")
+    html = _MD_RENDERER.render(md or "")
     rendered = transform_html(html)
 
-    text = re.sub(r"(?m)^(\s*)•", r"\1-", rendered.text)
+    text = _BULLET_RE.sub(r"\1-", rendered.text)
 
     entities = [dict(e) for e in rendered.entities]
     return text, entities
@@ -218,7 +220,6 @@ class ExecProgressRenderer:
         max_actions: int = 5,
         command_width: int | None = MAX_PROGRESS_CMD_LEN,
         resume_formatter: Callable[[ResumeToken], str] | None = None,
-        show_title: bool = False,
     ) -> None:
         self.max_actions = max(0, int(max_actions))
         self.command_width = command_width
@@ -226,16 +227,13 @@ class ExecProgressRenderer:
         self.action_count = 0
         self.seen_action_ids: set[str] = set()
         self.resume_token: ResumeToken | None = None
-        self.session_title: str | None = None
         self._resume_formatter = resume_formatter
-        self.show_title = show_title
         self.engine = engine
 
     def note_event(self, event: TakopiEvent) -> bool:
         match event:
-            case StartedEvent(resume=resume, title=title):
+            case StartedEvent(resume=resume):
                 self.resume_token = resume
-                self.session_title = title
                 return True
             case ActionEvent(action=action, phase=phase, ok=ok):
                 if action.kind == "turn":
@@ -286,7 +284,7 @@ class ExecProgressRenderer:
         header = format_header(
             elapsed_s,
             step,
-            label=self.label_with_title(label),
+            label=label,
             engine=self.engine,
         )
         body = self.assemble_body([line.text for line in self.lines])
@@ -299,17 +297,12 @@ class ExecProgressRenderer:
         header = format_header(
             elapsed_s,
             step,
-            label=self.label_with_title(status),
+            label=status,
             engine=self.engine,
         )
         answer = (answer or "").strip()
         body = answer if answer else None
         return MarkdownParts(header=header, body=body, footer=self.render_footer())
-
-    def label_with_title(self, label: str) -> str:
-        if self.show_title and self.session_title:
-            return f"{label} ({self.session_title})"
-        return label
 
     def render_footer(self) -> str | None:
         if not self.resume_token or self._resume_formatter is None:
