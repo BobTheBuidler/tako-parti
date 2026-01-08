@@ -123,10 +123,10 @@ takopi opencode
 takopi pi
 ```
 
-list available transports (and override in a run):
+list available plugins (engines/transports), and override in a run:
 
 ```sh
-takopi transports
+takopi plugins
 takopi --transport telegram
 ```
 
@@ -144,6 +144,15 @@ to stop a run, reply to the progress message with `/cancel`.
 default: progress is silent, final answer is sent as a new message so you receive a notification, progress message is deleted.
 
 if you prefer no notifications, `--no-final-notify` edits the progress message into the final answer.
+
+## plugins
+
+Takopi supports entrypoint-based plugins for engines and transports.
+
+See:
+
+- `docs/plugins.md`
+- `docs/public-api.md`
 
 ## notes
 

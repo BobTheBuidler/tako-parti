@@ -3,15 +3,16 @@ from pathlib import Path
 import anyio
 import pytest
 
+from takopi import commands, plugins
+import takopi.telegram.bridge as bridge
+from takopi.directives import parse_directives
 from takopi.telegram.bridge import (
     TelegramBridgeConfig,
     TelegramTransport,
     _build_bot_commands,
     _handle_cancel,
     _is_cancel_command,
-    _resolve_message,
     _send_with_resume,
-    _strip_engine_command,
     run_main_loop,
 )
 from takopi.context import RunContext
@@ -20,8 +21,11 @@ from takopi.runner_bridge import ExecBridgeConfig, RunningTask
 from takopi.markdown import MarkdownPresenter
 from takopi.model import EngineId, ResumeToken
 from takopi.router import AutoRouter, RunnerEntry
+from takopi.transport_runtime import TransportRuntime
 from takopi.runners.mock import Return, ScriptRunner, Sleep, Wait
-from takopi.transport import IncomingMessage, MessageRef, RenderedMessage, SendOptions
+from takopi.telegram.types import TelegramIncomingMessage
+from takopi.transport import MessageRef, RenderedMessage, SendOptions
+from tests.plugin_fixtures import FakeEntryPoint, install_entrypoints
 
 CODEX_ENGINE = EngineId("codex")
 
@@ -185,59 +189,78 @@ def _make_cfg(
         presenter=MarkdownPresenter(),
         final_notify=True,
     )
+    runtime = TransportRuntime(
+        router=_make_router(runner),
+        projects=empty_projects_config(),
+    )
     return TelegramBridgeConfig(
         bot=_FakeBot(),
-        router=_make_router(runner),
+        runtime=runtime,
         chat_id=123,
         startup_msg="",
         exec_cfg=exec_cfg,
     )
 
 
-def test_strip_engine_command_inline() -> None:
-    text, engine = _strip_engine_command(
-        "/claude do it", engine_ids=("codex", "claude")
+def test_parse_directives_inline_engine() -> None:
+    directives = parse_directives(
+        "/claude do it",
+        engine_ids=("codex", "claude"),
+        projects=empty_projects_config(),
     )
-    assert engine == "claude"
-    assert text == "do it"
+    assert directives.engine == "claude"
+    assert directives.prompt == "do it"
 
 
-def test_strip_engine_command_newline() -> None:
-    text, engine = _strip_engine_command(
-        "/codex\nhello", engine_ids=("codex", "claude")
+def test_parse_directives_newline() -> None:
+    directives = parse_directives(
+        "/codex\nhello",
+        engine_ids=("codex", "claude"),
+        projects=empty_projects_config(),
     )
-    assert engine == "codex"
-    assert text == "hello"
+    assert directives.engine == "codex"
+    assert directives.prompt == "hello"
 
 
-def test_strip_engine_command_ignores_unknown() -> None:
-    text, engine = _strip_engine_command("/unknown hi", engine_ids=("codex", "claude"))
-    assert engine is None
-    assert text == "/unknown hi"
-
-
-def test_strip_engine_command_bot_suffix() -> None:
-    text, engine = _strip_engine_command(
-        "/claude@bunny_agent_bot hi", engine_ids=("claude",)
+def test_parse_directives_ignores_unknown() -> None:
+    directives = parse_directives(
+        "/unknown hi",
+        engine_ids=("codex", "claude"),
+        projects=empty_projects_config(),
     )
-    assert engine == "claude"
-    assert text == "hi"
+    assert directives.engine is None
+    assert directives.prompt == "/unknown hi"
 
 
-def test_strip_engine_command_only_first_non_empty_line() -> None:
-    text, engine = _strip_engine_command(
-        "hello\n/claude hi", engine_ids=("codex", "claude")
+def test_parse_directives_bot_suffix() -> None:
+    directives = parse_directives(
+        "/claude@bunny_agent_bot hi",
+        engine_ids=("claude",),
+        projects=empty_projects_config(),
     )
-    assert engine is None
-    assert text == "hello\n/claude hi"
+    assert directives.engine == "claude"
+    assert directives.prompt == "hi"
+
+
+def test_parse_directives_only_first_non_empty_line() -> None:
+    directives = parse_directives(
+        "hello\n/claude hi",
+        engine_ids=("codex", "claude"),
+        projects=empty_projects_config(),
+    )
+    assert directives.engine is None
+    assert directives.prompt == "hello\n/claude hi"
 
 
 def test_build_bot_commands_includes_cancel_and_engine() -> None:
     runner = ScriptRunner(
         [Return(answer="ok")], engine=CODEX_ENGINE, resume_value="sid"
     )
-    router = _make_router(runner)
-    commands = _build_bot_commands(router, empty_projects_config())
+    runtime = TransportRuntime(
+        router=_make_router(runner),
+        projects=empty_projects_config(),
+    )
+    commands = _build_bot_commands(runtime)
 
     assert {"command": "cancel", "description": "cancel run"} in commands
     assert any(cmd["command"] == "codex" for cmd in commands)
@@ -264,10 +287,40 @@ def test_build_bot_commands_includes_projects() -> None:
         default_project=None,
     )
 
-    commands = _build_bot_commands(router, projects)
+    runtime = TransportRuntime(router=router, projects=projects)
+    commands = _build_bot_commands(runtime)
 
     assert any(cmd["command"] == "good" for cmd in commands)
     assert not any(cmd["command"] == "bad-name" for cmd in commands)
+
+
+def test_build_bot_commands_includes_command_plugins(monkeypatch) -> None:
+    class _Command:
+        id = "pingcmd"
+        description = "ping command"
+
+        async def handle(self, ctx):
+            _ = ctx
+            return None
+
+    entrypoints = [
+        FakeEntryPoint(
+            "pingcmd",
+            "takopi.commands.ping:BACKEND",
+            plugins.COMMAND_GROUP,
+            loader=_Command,
+        )
+    ]
+    install_entrypoints(monkeypatch, entrypoints)
+    runner = ScriptRunner([Return(answer="ok")], engine=CODEX_ENGINE)
+    runtime = TransportRuntime(
+        router=_make_router(runner),
+        projects=empty_projects_config(),
+    )
+
+    commands_list = _build_bot_commands(runtime)
+
+    assert {"command": "pingcmd", "description": "ping command"} in commands_list
 
 
 def test_build_bot_commands_caps_total() -> None:
@@ -287,7 +340,8 @@ def test_build_bot_commands_caps_total() -> None:
         default_project=None,
     )
 
-    commands = _build_bot_commands(router, projects)
+    runtime = TransportRuntime(router=router, projects=projects)
+    commands = _build_bot_commands(runtime)
 
     assert len(commands) == 100
     assert any(cmd["command"] == "codex" for cmd in commands)
@@ -410,7 +464,7 @@ async def test_telegram_transport_edit_wait_false_returns_ref() -> None:
 async def test_handle_cancel_without_reply_prompts_user() -> None:
     transport = _FakeTransport()
     cfg = _make_cfg(transport)
-    msg = IncomingMessage(
+    msg = TelegramIncomingMessage(
         transport="telegram",
         chat_id=123,
         message_id=10,
@@ -431,7 +485,7 @@ async def test_handle_cancel_without_reply_prompts_user() -> None:
 async def test_handle_cancel_with_no_progress_message_says_nothing_running() -> None:
     transport = _FakeTransport()
     cfg = _make_cfg(transport)
-    msg = IncomingMessage(
+    msg = TelegramIncomingMessage(
         transport="telegram",
         chat_id=123,
         message_id=10,
@@ -453,7 +507,7 @@ async def test_handle_cancel_with_finished_task_says_nothing_running() -> None:
     transport = _FakeTransport()
     cfg = _make_cfg(transport)
     progress_id = 99
-    msg = IncomingMessage(
+    msg = TelegramIncomingMessage(
         transport="telegram",
         chat_id=123,
         message_id=10,
@@ -475,7 +529,7 @@ async def test_handle_cancel_cancels_running_task() -> None:
     transport = _FakeTransport()
     cfg = _make_cfg(transport)
     progress_id = 42
-    msg = IncomingMessage(
+    msg = TelegramIncomingMessage(
         transport="telegram",
         chat_id=123,
         message_id=10,
@@ -499,7 +553,7 @@ async def test_handle_cancel_only_cancels_matching_progress_message() -> None:
     cfg = _make_cfg(transport)
     task_first = RunningTask()
     task_second = RunningTask()
-    msg = IncomingMessage(
+    msg = TelegramIncomingMessage(
         transport="telegram",
         chat_id=123,
         message_id=10,
@@ -527,23 +581,22 @@ def test_cancel_command_accepts_extra_text() -> None:
 
 
 def test_resolve_message_accepts_backticked_ctx_line() -> None:
-    router = _make_router(ScriptRunner([Return(answer="ok")], engine=CODEX_ENGINE))
-    projects = ProjectsConfig(
-        projects={
-            "takopi": ProjectConfig(
-                alias="takopi",
-                path=Path("."),
-                worktrees_dir=Path(".worktrees"),
-            )
-        },
-        default_project=None,
+    runtime = TransportRuntime(
+        router=_make_router(ScriptRunner([Return(answer="ok")], engine=CODEX_ENGINE)),
+        projects=ProjectsConfig(
+            projects={
+                "takopi": ProjectConfig(
+                    alias="takopi",
+                    path=Path("."),
+                    worktrees_dir=Path(".worktrees"),
+                )
+            },
+            default_project=None,
+        ),
     )
-
-    resolved = _resolve_message(
+    resolved = runtime.resolve_message(
         text="do it",
         reply_text="`ctx: takopi @ feat/api`",
-        router=router,
-        projects=projects,
     )
 
     assert resolved.prompt == "do it"
@@ -643,16 +696,20 @@ async def test_run_main_loop_routes_reply_to_running_resume() -> None:
         presenter=MarkdownPresenter(),
         final_notify=True,
     )
+    runtime = TransportRuntime(
+        router=_make_router(runner),
+        projects=empty_projects_config(),
+    )
     cfg = TelegramBridgeConfig(
         bot=bot,
-        router=_make_router(runner),
+        runtime=runtime,
         chat_id=123,
         startup_msg="",
         exec_cfg=exec_cfg,
     )
 
     async def poller(_cfg: TelegramBridgeConfig):
-        yield IncomingMessage(
+        yield TelegramIncomingMessage(
             transport="telegram",
             chat_id=123,
             message_id=1,
@@ -666,7 +723,7 @@ async def test_run_main_loop_routes_reply_to_running_resume() -> None:
         assert isinstance(transport.progress_ref.message_id, int)
         reply_id = transport.progress_ref.message_id
         reply_ready.set()
-        yield IncomingMessage(
+        yield TelegramIncomingMessage(
             transport="telegram",
             chat_id=123,
             message_id=2,
@@ -694,3 +751,212 @@ async def test_run_main_loop_routes_reply_to_running_resume() -> None:
             hold.set()
             stop_polling.set()
             tg.cancel_scope.cancel()
+
+
+@pytest.mark.anyio
+async def test_run_main_loop_handles_command_plugins(monkeypatch) -> None:
+    class _Command:
+        id = "echo_cmd"
+        description = "echo"
+
+        async def handle(self, ctx):
+            return commands.CommandResult(text=f"echo:{ctx.args_text}")
+
+    entrypoints = [
+        FakeEntryPoint(
+            "echo_cmd",
+            "takopi.commands.echo:BACKEND",
+            plugins.COMMAND_GROUP,
+            loader=_Command,
+        )
+    ]
+    install_entrypoints(monkeypatch, entrypoints)
+
+    transport = _FakeTransport()
+    bot = _FakeBot()
+    runner = ScriptRunner([Return(answer="ok")], engine=CODEX_ENGINE)
+    exec_cfg = ExecBridgeConfig(
+        transport=transport,
+        presenter=MarkdownPresenter(),
+        final_notify=True,
+    )
+    runtime = TransportRuntime(
+        router=_make_router(runner),
+        projects=empty_projects_config(),
+    )
+    cfg = TelegramBridgeConfig(
+        bot=bot,
+        runtime=runtime,
+        chat_id=123,
+        startup_msg="",
+        exec_cfg=exec_cfg,
+    )
+
+    async def poller(_cfg: TelegramBridgeConfig):
+        yield TelegramIncomingMessage(
+            transport="telegram",
+            chat_id=123,
+            message_id=1,
+            text="/echo_cmd hello",
+            reply_to_message_id=None,
+            reply_to_text=None,
+            sender_id=123,
+        )
+
+    await run_main_loop(cfg, poller)
+
+    assert runner.calls == []
+    assert transport.send_calls
+    assert transport.send_calls[-1]["message"].text == "echo:hello"
+
+
+@pytest.mark.anyio
+async def test_run_main_loop_command_uses_project_default_engine(
+    monkeypatch,
+) -> None:
+    class _Command:
+        id = "use_project"
+        description = "use project default"
+
+        async def handle(self, ctx):
+            result = await ctx.executor.run_one(
+                commands.RunRequest(
+                    prompt="hello",
+                    context=RunContext(project="proj"),
+                ),
+                mode="capture",
+            )
+            return commands.CommandResult(text=f"ran:{result.engine}")
+
+    entrypoints = [
+        FakeEntryPoint(
+            "use_project",
+            "takopi.commands.use_project:BACKEND",
+            plugins.COMMAND_GROUP,
+            loader=_Command,
+        )
+    ]
+    install_entrypoints(monkeypatch, entrypoints)
+
+    transport = _FakeTransport()
+    bot = _FakeBot()
+    codex_runner = ScriptRunner([Return(answer="ok")], engine=CODEX_ENGINE)
+    pi_runner = ScriptRunner([Return(answer="ok")], engine=EngineId("pi"))
+    router = AutoRouter(
+        entries=[
+            RunnerEntry(engine=codex_runner.engine, runner=codex_runner),
+            RunnerEntry(engine=pi_runner.engine, runner=pi_runner),
+        ],
+        default_engine=codex_runner.engine,
+    )
+    projects = ProjectsConfig(
+        projects={
+            "proj": ProjectConfig(
+                alias="proj",
+                path=Path("."),
+                worktrees_dir=Path(".worktrees"),
+                default_engine=pi_runner.engine,
+            )
+        },
+        default_project=None,
+    )
+    runtime = TransportRuntime(
+        router=router,
+        projects=projects,
+    )
+    exec_cfg = ExecBridgeConfig(
+        transport=transport,
+        presenter=MarkdownPresenter(),
+        final_notify=True,
+    )
+    cfg = TelegramBridgeConfig(
+        bot=bot,
+        runtime=runtime,
+        chat_id=123,
+        startup_msg="",
+        exec_cfg=exec_cfg,
+    )
+
+    async def poller(_cfg: TelegramBridgeConfig):
+        yield TelegramIncomingMessage(
+            transport="telegram",
+            chat_id=123,
+            message_id=1,
+            text="/use_project",
+            reply_to_message_id=None,
+            reply_to_text=None,
+            sender_id=123,
+        )
+
+    await run_main_loop(cfg, poller)
+
+    assert codex_runner.calls == []
+    assert len(pi_runner.calls) == 1
+    assert transport.send_calls[-1]["message"].text == "ran:pi"
+
+
+@pytest.mark.anyio
+async def test_run_main_loop_refreshes_command_ids(monkeypatch) -> None:
+    class _Command:
+        id = "late_cmd"
+        description = "late command"
+
+        async def handle(self, ctx):
+            return commands.CommandResult(text="late")
+
+    entrypoints = [
+        FakeEntryPoint(
+            "late_cmd",
+            "takopi.commands.late:BACKEND",
+            plugins.COMMAND_GROUP,
+            loader=_Command,
+        )
+    ]
+    install_entrypoints(monkeypatch, entrypoints)
+
+    calls = {"count": 0}
+
+    def _list_command_ids(*, allowlist=None):
+        _ = allowlist
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return []
+        return ["late_cmd"]
+
+    monkeypatch.setattr(bridge, "list_command_ids", _list_command_ids)
+
+    transport = _FakeTransport()
+    bot = _FakeBot()
+    runner = ScriptRunner([Return(answer="ok")], engine=CODEX_ENGINE)
+    exec_cfg = ExecBridgeConfig(
+        transport=transport,
+        presenter=MarkdownPresenter(),
+        final_notify=True,
+    )
+    runtime = TransportRuntime(
+        router=_make_router(runner),
+        projects=empty_projects_config(),
+    )
+    cfg = TelegramBridgeConfig(
+        bot=bot,
+        runtime=runtime,
+        chat_id=123,
+        startup_msg="",
+        exec_cfg=exec_cfg,
+    )
+
+    async def poller(_cfg: TelegramBridgeConfig):
+        yield TelegramIncomingMessage(
+            transport="telegram",
+            chat_id=123,
+            message_id=1,
+            text="/late_cmd hello",
+            reply_to_message_id=None,
+            reply_to_text=None,
+            sender_id=123,
+        )
+
+    await run_main_loop(cfg, poller)
+
+    assert calls["count"] >= 2
+    assert transport.send_calls[-1]["message"].text == "late"
