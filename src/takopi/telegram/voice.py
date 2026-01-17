@@ -28,10 +28,23 @@ class VoiceTranscriber(Protocol):
 
 
 class OpenAIVoiceTranscriber:
+    def __init__(
+        self,
+        *,
+        base_url: str | None = None,
+        api_key: str | None = None,
+    ) -> None:
+        self._base_url = base_url
+        self._api_key = api_key
+
     async def transcribe(self, *, model: str, audio_bytes: bytes) -> str:
         audio_file = io.BytesIO(audio_bytes)
         audio_file.name = "voice.ogg"
-        async with AsyncOpenAI(timeout=120) as client:
+        async with AsyncOpenAI(
+            base_url=self._base_url,
+            api_key=self._api_key,
+            timeout=120,
+        ) as client:
             response = await client.audio.transcriptions.create(
                 model=model,
                 file=audio_file,
@@ -48,6 +61,8 @@ async def transcribe_voice(
     max_bytes: int | None = None,
     reply: Callable[..., Awaitable[None]],
     transcriber: VoiceTranscriber | None = None,
+    base_url: str | None = None,
+    api_key: str | None = None,
 ) -> str | None:
     voice = msg.voice
     if voice is None:
@@ -74,7 +89,7 @@ async def transcribe_voice(
         await reply(text="voice message is too large to transcribe.")
         return None
     if transcriber is None:
-        transcriber = OpenAIVoiceTranscriber()
+        transcriber = OpenAIVoiceTranscriber(base_url=base_url, api_key=api_key)
     try:
         return await transcriber.transcribe(model=model, audio_bytes=audio_bytes)
     except OpenAIError as exc:
