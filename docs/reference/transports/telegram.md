@@ -239,10 +239,9 @@ before running without directives.
 
 Keys (include `chat_id` to avoid cross-chat collisions):
 
-- (dit, chat_id, message_id) for edits (coalesced).
-- (elete, chat_id, message_id) for deletes.
-- (end, chat_id, replace_message_id) when replacing a progress message.
-- Unique key for normal sends.
+ `("edit", chat_id, message_id)` for edits (coalesced).
+ `("delete", chat_id, message_id)` for deletes.
+ `("send", chat_id, replace_message_id)` when replacing a progress message.
 
 Scheduling:
 
