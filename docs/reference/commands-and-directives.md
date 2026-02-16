@@ -35,17 +35,15 @@ This line is parsed from replies and takes precedence over new directives.
 | Command | Description |
 |---------|-------------|
 | `/cancel` | Reply to the progress message to stop the current run. |
-| `/agent` | Show/set the default engine for the current scope. |
-| `/model` | Show/set the model override for the current scope. |
-| `/reasoning` | Show/set the reasoning override for the current scope. |
-| `/trigger` | Show/set trigger mode (mentions-only vs all). |
 | `/file put <path>` | Upload a document into the repo/worktree (requires file transfer enabled). |
-| `/file get <path>` | Fetch a file or directory back into Telegram. |
 | `/topic <project> @branch` | Create/bind a topic (topics enabled). |
 | `/ctx` | Show context binding (chat or topic). |
 | `/ctx set <project> @branch` | Update context binding. |
-| `/ctx clear` | Remove context binding. |
 | `/new` | Clear stored sessions for the current scope (topic/chat). |
+| `/pause` | Pause runs for the current topic (topics enabled). |
+| `/resume` | Resume runs for the current topic (topics enabled). |
+| `/swarm <count>` | Fork a branch and create topic(s) (topics enabled). |
+| `/allrepos <query>` | Run a query across all registered repos (topics enabled). |
 
 Notes:
 

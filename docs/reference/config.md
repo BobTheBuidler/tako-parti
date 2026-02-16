@@ -54,186 +54,219 @@ If you expect to edit config while Takopi is running, set:
 | `voice_transcription_model` | string | `"gpt-4o-mini-transcribe"` | OpenAI transcription model name. |
 | `voice_transcription_base_url` | string\|null | `null` | Override base URL for voice transcription only. |
 | `voice_transcription_api_key` | string\|null | `null` | Override API key for voice transcription only. |
-| `session_mode` | `"stateless"`\|`"chat"` | `"stateless"` | Auto-resume mode. Onboarding sets `"chat"` for assistant/workspace. |
-| `show_resume_line` | bool | `true` | Show resume line in message footer. Onboarding sets `false` for assistant/workspace. |
+| `session_mode` | `"chat"`\|`"stateless"` | `"chat"` | Chat mode auto-resumes; stateless requires reply to continue. |
+| `show_resume_line` | bool | `false` | Show resume lines in Telegram responses. |
+| `truncate_progress_tool_calls` | bool | `true` | Remove tool-call details from progress messages (cleaner in chat). |
+| `truncate_progress_tool_calls_newline` | bool | `true` | Replace tool-call details with a newline.
+| `progress_tool_calls_max` | int | `5` | Max number of tool calls to show if truncation is off. |
+| `progress_tool_calls_inline` | bool | `false` | Show tool calls inline vs in separate lines. |
+| `show_resume_button` | bool | `true` | Show a button on the final message for resuming the conversation. |
+| `show_context_footer` | bool | `true` | Show a `ctx: <project> @<branch>` footer line on final messages. |
+| `show_progress_header` | bool | `true` | Show header with agent + elapsed time. |
+| `progress_header_template` | string | `"🤖 · working · {engine} · {elapsed} · step {step}"` | Template for progress header. |
+| `progress_line_template` | string | `"{prefix} {label}"` | Template for progress detail lines. |
+| `show_agent_name` | bool | `true` | Show the engine id in the header when `progress_header_template` uses `{engine}`. |
+| `show_progress_steps` | bool | `true` | Include the `step N` suffix in the header. |
+| `show_progress_tools` | bool | `true` | Show tool-call details when truncation is off. |
+| `show_context_header` | bool | `true` | Show a context line above progress.
+| `show_context_header_title` | string | `"Context"` | Label for the context header.
+| `show_context_header_title_emoji` | string | `"📍"` | Emoji for the context header title.
+| `show_context_header_padding` | bool | `true` | Insert a blank line after the context header.
+| `show_context_header_project_emoji` | string | `"📁"` | Emoji for the project name line.
+| `show_context_header_branch_emoji` | string | `"🌿"` | Emoji for the branch line.
+| `show_context_header_style` | `"inline"`\|`"block"` | `"block"` | Render context header in a block or inline style.
+| `show_context_header_branch_prefix` | string | `"@"` | Prefix for branch name.
+| `show_context_header_project_prefix` | string | `""` | Prefix for project name.
+| `show_context_header_project_in_branch` | bool | `true` | Include project in branch line when showing block context header.
+| `forward_edits` | bool | `false` | Forward edited progress messages to the chat. |
 
-When `allowed_user_ids` is set, updates without a sender id (for example, some channel posts) are ignored.
+## `transports.telegram.session_mode`
 
-### `transports.telegram.topics`
+- `chat` (default): new messages auto-resume the last session.
+- `stateless`: you must reply to a resume line to continue a conversation.
 
-| Key | Type | Default | Notes |
-|-----|------|---------|-------|
-| `enabled` | bool | `false` | Enable forum-topic features. |
-| `scope` | `"auto"`\|`"main"`\|`"projects"`\|`"all"` | `"auto"` | Where topics are managed. |
-
-### `transports.telegram.files`
-
-| Key | Type | Default | Notes |
-|-----|------|---------|-------|
-| `enabled` | bool | `false` | Enable `/file put` and `/file get`. |
-| `auto_put` | bool | `true` | Auto-save uploads. |
-| `auto_put_mode` | `"upload"`\|`"prompt"` | `"upload"` | Whether uploads also start a run. |
-| `uploads_dir` | string | `"incoming"` | Relative path inside the repo/worktree. |
-| `allowed_user_ids` | int[] | `[]` | Allowed senders for file transfer; empty allows private chats (group usage requires admin). |
-| `deny_globs` | string[] | (defaults) | Glob denylist (e.g. `.git/**`, `**/*.pem`). |
-
-File size limits (not configurable):
-
-- uploads: 20 MiB
-- downloads: 50 MiB
-
-## `projects.<alias>`
+## `transports.telegram.topics`
 
 === "takopi config"
 
     ```sh
-    takopi config set projects.happy-gadgets.path "~/dev/happy-gadgets"
-    takopi config set projects.happy-gadgets.worktrees_dir ".worktrees"
-    takopi config set projects.happy-gadgets.default_engine "claude"
-    takopi config set projects.happy-gadgets.worktree_base "master"
-    takopi config set projects.happy-gadgets.chat_id -1001234567890
+    takopi config set transports.telegram.topics.enabled true
+    takopi config set transports.telegram.topics.scope "auto"
+    takopi config set transports.telegram.topics.index_prefix "takopi"
+    takopi config set transports.telegram.topics.rename_format "{project} {branch}"
     ```
 
 === "toml"
 
     ```toml
-    [projects.happy-gadgets]
-    path = "~/dev/happy-gadgets"
-    worktrees_dir = ".worktrees"
-    default_engine = "claude"
-    worktree_base = "master"
-    chat_id = -1001234567890
+    [transports.telegram.topics]
+    enabled = true
+    scope = "auto"
+    index_prefix = "takopi"
+    rename_format = "{project} {branch}"
     ```
 
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
-| `path` | string | (required) | Repo root (expands `~`). Relative paths are resolved against the config directory. |
-| `worktrees_dir` | string | `".worktrees"` | Worktree root (relative to `path` unless absolute). |
-| `default_engine` | string\|null | `null` | Per-project default engine. |
-| `worktree_base` | string\|null | `null` | Base branch for new worktrees. |
-| `chat_id` | int\|null | `null` | Bind a Telegram chat to this project. |
+| `enabled` | bool | `false` | Enable topics support. |
+| `scope` | `"auto"`\|`"main"`\|`"projects"`\|`"all"` | `"auto"` | Where topics are enabled. |
+| `index_prefix` | string | `"takopi"` | Prefix for topic names when auto-creating. |
+| `rename_format` | string | `"{project} {branch}"` | Format for renaming topics. |
+| `archive_on_unbind` | bool | `true` | Archive topic after clearing a binding.
+| `synthesize` | bool | `false` | Create a synthetic topic binding for non-topic chats.
 
-Legacy config note: top-level `bot_token` / `chat_id` are auto-migrated into `[transports.telegram]` on startup.
-
-## Plugins
-
-### `plugins.enabled`
+## `transports.telegram.files`
 
 === "takopi config"
 
     ```sh
-    takopi config set plugins.enabled '["takopi-transport-slack", "takopi-engine-acme"]'
+    takopi config set transports.telegram.files.enabled true
+    takopi config set transports.telegram.files.auto_put true
+    takopi config set transports.telegram.files.auto_put_mode "upload"
+    takopi config set transports.telegram.files.uploads_dir "incoming"
+    takopi config set transports.telegram.files.allowed_user_ids "[123456789]"
+    takopi config set transports.telegram.files.deny_globs '[".git/**", ".env", ".envrc", "**/*.pem", "**/.ssh/**"]'
     ```
 
 === "toml"
 
     ```toml
-    [plugins]
-    enabled = ["takopi-transport-slack", "takopi-engine-acme"]
+    [transports.telegram.files]
+    enabled = true
+    auto_put = true
+    auto_put_mode = "upload" # upload | prompt
+    uploads_dir = "incoming"
+    allowed_user_ids = [123456789]
+    deny_globs = [".git/**", ".env", ".envrc", "**/*.pem", "**/.ssh/**"]
     ```
-
-- `enabled = []` (default) means “load all installed plugins”.
-- If non-empty, only distributions with matching names are visible (case-insensitive).
-
-### `plugins.<id>`
-
-Plugin-specific configuration lives under `[plugins.<id>]` and is passed to command plugins as `ctx.plugin_config`.
-
-## Engine-specific config tables
-
-Engines use **top-level tables** keyed by engine id. Built-in engines are listed
-here; plugin engines should document their own keys.
-
-### `codex`
 
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
-| `extra_args` | string[] | `["-c", "notify=[]"]` | Extra CLI args for `codex` (exec-only flags are rejected). |
-| `profile` | string | (unset) | Passed as `--profile <name>` and used as the session title. |
+| `enabled` | bool | `false` | Enable file transfer. |
+| `auto_put` | bool | `false` | Auto-save files without prompting. |
+| `auto_put_mode` | `"upload"`\|`"prompt"` | `"prompt"` | File handling behavior. |
+| `uploads_dir` | string | `"incoming"` | Directory for uploads.
+| `allowed_user_ids` | int[] | `[]` | Allowed senders for file uploads. Empty disables sender filtering; when set, only these users can upload.
+| `deny_globs` | string[] | `[]` | Glob patterns that are rejected even when a user is allowed.
+
+## `transports.telegram.notifications`
+
+```toml
+[transports.telegram.notifications]
+# Try `notify` first; fall back to `mention`.
+mode = "notify" # notify | mention
+```
+
+## `transports.telegram.voice_transcription`
+
+```toml
+[transports.telegram.voice_transcription]
+enabled = true
+model = "gpt-4o-mini-transcribe"
+```
+
+## `transports.telegram.voice_transcription` (direct overrides)
+
+```toml
+[transports.telegram.voice_transcription]
+api_key = "..." # override base api key
+base_url = "https://api.openai.com/v1" # override base api url
+```
+
+## `transports.telegram.defaults`
+
+You can set per-chat defaults for:
+
+- `engine`
+- `project`
+- `branch`
+
+## `transports.telegram.shortcuts`
+
+Define in-chat shortcuts:
+
+```toml
+[transports.telegram.shortcuts]
+"/prod" = "/backend @main"
+```
+
+## `transports.telegram.commands`
 
 === "takopi config"
 
     ```sh
-    takopi config set codex.extra_args '["-c", "notify=[]"]'
-    takopi config set codex.profile "work"
+    takopi config set transports.telegram.commands.enabled true
+    takopi config set transports.telegram.commands.manage_mode "auto"
+    takopi config set transports.telegram.commands.sanitize_quotes "trim"
     ```
 
 === "toml"
 
     ```toml
-    [codex]
-    extra_args = ["-c", "notify=[]"]
-    profile = "work"
+    [transports.telegram.commands]
+    enabled = true
+    manage_mode = "auto" # auto | on | off
+    sanitize_quotes = "trim" # trim | strip | none
     ```
-
-### `claude`
 
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
-| `model` | string | (unset) | Optional model override. |
-| `allowed_tools` | string[] | `["Bash", "Read", "Edit", "Write"]` | Auto-approve tool rules. |
-| `dangerously_skip_permissions` | bool | `false` | Skip Claude permissions prompts. |
-| `use_api_billing` | bool | `false` | Keep `ANTHROPIC_API_KEY` for API billing. |
+| `enabled` | bool | `true` | Enable Telegram commands. |
+| `manage_mode` | `"auto"`\|`"on"`\|`"off"` | `"auto"` | Refresh bot commands on startup. |
+| `sanitize_quotes` | `"trim"`\|`"strip"`\|`"none"` | `"trim"` | How to sanitize quoted replies passed into the prompt. |
 
-=== "takopi config"
-
-    ```sh
-    takopi config set claude.model "claude-sonnet-4-5-20250929"
-    takopi config set claude.allowed_tools '["Bash", "Read", "Edit", "Write"]'
-    takopi config set claude.dangerously_skip_permissions false
-    takopi config set claude.use_api_billing false
-    ```
-
-=== "toml"
-
-    ```toml
-    [claude]
-    model = "claude-sonnet-4-5-20250929"
-    allowed_tools = ["Bash", "Read", "Edit", "Write"]
-    dangerously_skip_permissions = false
-    use_api_billing = false
-    ```
-
-### `pi`
+## `transports.telegram.commands` (continued)
 
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
-| `model` | string | (unset) | Passed as `--model`. |
-| `provider` | string | (unset) | Passed as `--provider`. |
-| `extra_args` | string[] | `[]` | Extra CLI args for `pi`. |
+| `summary_prompt` | string | `"You are a helpful assistant."` | System prompt for summary command.
+| `summary_temperature` | float | `0.2` | Summary temperature.
+| `summary_max_tokens` | int | `512` | Summary max tokens.
+| `topics_prompt` | string | `"You are a helpful assistant."` | System prompt for topics commands.
+| `topics_temperature` | float | `0.2` | Summary temperature.
+| `topics_max_tokens` | int | `512` | Summary max tokens.
+| `topics_summarize_message_limit` | int | `50` | Max messages to summarize.
+| `topics_summarize_latest` | bool | `false` | Summarize only latest message.
+| `topics_prompt_style` | `"short"`\|`"long"` | `"short"` | Prompt shape for topics response.
+| `topics_reply_style` | `"short"`\|`"long"` | `"short"` | Response shape for topics.
+| `topics_progress_placeholder` | string | `"Summarizing…"` | Placeholder while topics summary runs.
+| `topics_summary_template` | string | `"{summary}"` | Template for summary output.
+| `topics_summary_entry_template` | string | `"- {summary}"` | Template for the bullet entries.
+| `topics_summary_none` | string | `"No recent messages."` | Output when no messages.
+| `topics_summary_intro` | string | `"Recent messages"` | Title for summary.
+| `topics_summary_show_chat_label` | bool | `true` | Show chat label in summary.
 
-=== "takopi config"
-
-    ```sh
-    takopi config set pi.model "..."
-    takopi config set pi.provider "..."
-    takopi config set pi.extra_args "[]"
-    ```
-
-=== "toml"
-
-    ```toml
-    [pi]
-    model = "..."
-    provider = "..."
-    extra_args = []
-    ```
-
-### `opencode`
+## `transports.telegram.commands` (chat sessions)
 
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
-| `model` | string | (unset) | Optional model override. |
+| `sessions_enabled` | bool | `true` | Store session mappings in memory.
+| `sessions_idle_ttl_s` | float | `86400` | Session TTL.
+| `sessions_store_path` | string | `"telegram_sessions.json"` | Session store file.
+| `session_mode` | `"chat"`\|`"stateless"` | `"chat"` | How the chat handles new messages. |
+| `final_resume_line` | `"auto"`\|`"always"`\|`"never"` | `"auto"` | When to show resume lines for chat sessions. |
 
-=== "takopi config"
+## `transports.telegram.commands` (allrepos)
 
-    ```sh
-    takopi config set opencode.model "claude-sonnet"
-    ```
+| Key | Type | Default | Notes |
+|-----|------|---------|-------|
+| `allrepos_enabled` | bool | `false` | Enable allrepos command.
+| `allrepos_default_glob` | string | `"**/*"` | Default file glob.
+| `allrepos_auto_generate_glob` | bool | `true` | Auto-apply exclude filters if absent.
+| `allrepos_default_exclude` | string | `".git/**"` | Default exclude glob.
 
-=== "toml"
+## `transports.telegram.commands` (swarm)
 
-    ```toml
-    [opencode]
-    model = "claude-sonnet"
-    ```
+| Key | Type | Default | Notes |
+|-----|------|---------|-------|
+| `swarm_enabled` | bool | `false` | Enable swarm command.
+| `swarm_branch_prefix` | string | `"swarm"` | Prefix for swarm branches.
+| `swarm_branch_length` | int | `8` | Random suffix length.
+| `swarm_topic_prefix` | string | `"swarm"` | Prefix for swarm topics.
+| `swarm_topic_length` | int | `8` | Random suffix length.
+
+## Related
+
+- [Commands & directives](commands-and-directives.md)
+- [Transport: Telegram](transports/telegram.md)
+- [Tutorial: file transfer](../how-to/file-transfer.md)

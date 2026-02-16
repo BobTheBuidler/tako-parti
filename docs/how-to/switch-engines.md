@@ -15,21 +15,30 @@ Prefix the first non-empty line with an engine directive:
 
 Directives are only parsed at the start of the first non-empty line.
 
-## Set a default engine for the current scope
+## Set a default engine
 
-Use `/agent`:
+Use config defaults instead of chat commands:
 
-```
-/agent
-/agent set claude
-/agent clear
-```
+=== "takopi config"
 
-- Inside a forum topic, `/agent set` affects that topic.
-- In normal chats, it affects the whole chat.
-- In group chats, only admins can change defaults.
+    ```sh
+    # global default
+    takopi config set default_engine "claude"
 
-Selection precedence (highest to lowest): resume token → `/<engine-id>` directive → topic default → chat default → project default → global default.
+    # per-project default
+    takopi config set projects.backend.default_engine "claude"
+    ```
+
+=== "toml"
+
+    ```toml
+    default_engine = "claude"
+
+    [projects.backend]
+    default_engine = "claude"
+    ```
+
+Selection precedence (highest to lowest): resume token → `/<engine-id>` directive → project default → global default.
 
 ## Engine installation
 
