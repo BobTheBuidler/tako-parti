@@ -114,6 +114,10 @@ def _parse_incoming_message(
     quote_position = quote.position if quote is not None else None
     quote_is_manual = quote.is_manual if quote is not None else None
     sender_id = msg.from_.id if msg.from_ is not None else None
+    sender_username = msg.from_.username if msg.from_ is not None else None
+    sender_first_name = msg.from_.first_name if msg.from_ is not None else None
+    sender_last_name = msg.from_.last_name if msg.from_ is not None else None
+    date = msg.date
     media_group_id = msg.media_group_id
     thread_id = msg.message_thread_id
     is_topic_message = msg.is_topic_message
@@ -138,6 +142,10 @@ def _parse_incoming_message(
         quote_position=quote_position,
         quote_is_manual=quote_is_manual,
         sender_id=sender_id,
+        sender_username=sender_username,
+        sender_first_name=sender_first_name,
+        sender_last_name=sender_last_name,
+        date=date,
         media_group_id=media_group_id,
         thread_id=thread_id,
         is_topic_message=is_topic_message,
