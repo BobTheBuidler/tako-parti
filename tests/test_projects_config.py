@@ -24,6 +24,17 @@ def test_parse_projects_rejects_engine_alias() -> None:
         )
 
 
+def test_parse_projects_rejects_robob_alias() -> None:
+    config = {**_base_config(), "projects": {"robob": {"path": "/tmp/repo"}}}
+    with pytest.raises(ConfigError, match="aliases must not match engine ids"):
+        settings = TakopiSettings.model_validate(config)
+        settings.to_projects_config(
+            config_path=Path("takopi.toml"),
+            engine_ids=["codex"],
+            reserved=RESERVED_CHAT_COMMANDS,
+        )
+
+
 def test_parse_projects_default_project_must_exist() -> None:
     config = {**_base_config(), "default_project": "z80", "projects": {}}
     with pytest.raises(ConfigError, match="default_project"):
@@ -97,6 +108,20 @@ def test_projects_default_engine_unknown() -> None:
             engine_ids=["codex"],
             reserved=RESERVED_CHAT_COMMANDS,
         )
+
+
+def test_projects_default_engine_alias_maps_to_codex() -> None:
+    config = {
+        **_base_config(),
+        "projects": {"z80": {"path": "/tmp/repo", "default_engine": "robob"}},
+    }
+    settings = TakopiSettings.model_validate(config)
+    projects = settings.to_projects_config(
+        config_path=Path("takopi.toml"),
+        engine_ids=["codex"],
+        reserved=RESERVED_CHAT_COMMANDS,
+    )
+    assert projects.projects["z80"].default_engine == "codex"
 
 
 def test_projects_chat_id_cannot_match_transport_chat_id() -> None:
