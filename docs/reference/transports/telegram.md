@@ -1,78 +1,200 @@
-# Telegram transport
+# Telegram Transport
 
-This reference is the exact schema for `transports.telegram`.
+## Overview
 
-See [Configuration](../config.md) for global defaults and full config.
+`TelegramClient` is the single transport for Telegram writes. It owns a
+`TelegramOutbox` that serializes send/edit/delete operations, applies
+coalescing, and enforces rate limits + retry-after backoff.
 
-## Basic configuration
+This document captures current behavior so transport changes stay intentional.
+
+## Flow
+
+1. Engine CLI emits JSONL events.
+2. We render progress on every step and diff against the last output.
+3. Only deltas enqueue a Telegram edit.
+4. High-value messages enqueue a send.
+5. All writes go through the outbox.
+
+## Incoming messages
+
+`parse_incoming_update` accepts text messages and voice notes.
+
+### Voice transcription
+
+If voice transcription is enabled, takopi downloads the voice payload from Telegram,
+transcribes it with OpenAI, and routes the transcript through the same command and
+directive pipeline as typed text.
+
+Configuration (under `[transports.telegram]`):
 
 === "takopi config"
 
     ```sh
-    takopi config set transports.telegram.bot_token "..."
-    takopi config set transports.telegram.chat_id 123
+    takopi config set transports.telegram.voice_transcription true
+    takopi config set transports.telegram.voice_transcription_model "gpt-4o-mini-transcribe"
+
+    # local OpenAI-compatible transcription server (optional)
+    takopi config set transports.telegram.voice_transcription_base_url "http://localhost:8000/v1"
+    takopi config set transports.telegram.voice_transcription_api_key "local"
+    ```
+
+=== "toml"
+
+    ```toml
+    voice_transcription = true
+    voice_transcription_model = "gpt-4o-mini-transcribe" # optional
+    voice_transcription_base_url = "http://localhost:8000/v1" # optional
+    voice_transcription_api_key = "local" # optional
+    ```
+
+Set `OPENAI_API_KEY` in the environment (or `voice_transcription_api_key` in config).
+If transcription is enabled but no API key is available or the audio download fails,
+takopi replies with a short error and skips the run.
+
+To use a local OpenAI-compatible Whisper server, set `voice_transcription_base_url`
+(and `voice_transcription_api_key` if the server expects one). This keeps engine
+requests on their own base URL without relying on `OPENAI_BASE_URL`. If your server
+requires a specific model name, set `voice_transcription_model` (for example,
+`whisper-1`).
+
+### Quote replies
+
+When a user sends a **manual** quote reply, Takopi injects the quoted snippet into
+the prompt as a blockquote. Auto-generated quotes are ignored. If the user only
+quotes and sends no text, Takopi adds `message: (empty)` after the quote to make
+the empty body explicit.
+
+### Trigger mode (mentions-only)
+
+Telegram’s bot privacy mode stops bots from seeing every message by default, but
+**admins always receive all messages** in groups. If you promote takopi to admin,
+Telegram will deliver every update even when privacy mode is enabled.
+
+To restore “only respond when invoked” behavior, use trigger mode:
+
+- `all` (default): any message can start a run (subject to ignore rules).
+- `mentions`: only start when explicitly invoked.
+
+Explicit invocation includes any of:
+
+- `@botname` mention in the message.
+- `/<engine-id>` or `/<project-alias>` as the first token.
+- Replying to a bot message.
+- Built-in or plugin slash commands (for example `/file`, `/new`, `/ctx`, `/topic`, `/pause`, `/resume`, `/swarm`, `/allrepos`, `/cancel`).
+
+Note: In forum topics, some Telegram clients include `reply_to_message` on every
+message, pointing at the topic’s root service message (`message_id ==
+message_thread_id`). Takopi treats those as implicit topic references, not
+explicit replies, so they do not trigger mentions-only mode.
+
+Trigger mode is stored in `telegram_chat_prefs_state.json` (chat default) and
+`telegram_topics_state.json` (topic overrides). Set `trigger_mode` to `mentions`
+or `all` in those files as needed.
+
+In group chats, changing trigger mode requires the sender to be an admin.
+
+State is stored in `telegram_chat_prefs_state.json` (chat default) and
+`telegram_topics_state.json` (topic overrides) alongside the config file.
+
+### Forwarded message coalescing
+
+Telegram sends a "comment + forwards" burst as separate messages, with the comment
+arriving first. Takopi waits briefly so it can attach the forwarded messages and
+run once.
+
+Behavior:
+
+- When a prompt candidate arrives, Takopi waits for `forward_coalesce_s` seconds
+  of quiet for that sender + chat/topic.
+- Forwarded messages arriving during the window are appended to the prompt
+  (separated by blank lines) and do not start their own runs.
+- Forwarded messages by themselves do not start runs.
+
+Configuration (under `[transports.telegram]`):
+
+=== "takopi config"
+
+    ```sh
+    takopi config set transports.telegram.forward_coalesce_s 1.0
+    ```
+
+=== "toml"
+
+    ```toml
+    forward_coalesce_s = 1.0 # set 0 to disable the delay
+    ```
+
+## Chat sessions (optional)
+
+If you chose the **handoff** workflow during onboarding, Takopi uses stateless mode
+where you reply to continue a session. The **assistant** and **workspace** workflows
+use chat mode with auto-resume enabled.
+
+Configuration (under `[transports.telegram]`):
+
+=== "takopi config"
+
+    ```sh
+    takopi config set transports.telegram.show_resume_line true
+    takopi config set transports.telegram.session_mode "chat"
+    ```
+
+=== "toml"
+
+    ```toml
+    show_resume_line = true # set false to hide resume lines
+    session_mode = "chat" # or "stateless"
+    ```
+
+Behavior:
+
+- Stores one resume token per engine per chat (per sender in group chats).
+- Auto-resumes when no explicit resume token is present.
+- Reply resume lines always take precedence and update the stored session for that engine.
+- Reset with `/new`.
+
+State is stored in `telegram_chat_sessions_state.json` alongside the config file.
+
+Set `show_resume_line = false` to hide resume lines when takopi can auto-resume
+(topics or chat sessions) and a project context is resolved. Otherwise the resume
+line stays visible so reply-to-continue still works.
+
+## Message overflow
+
+By default, takopi trims long final responses to ~3500 characters to stay under
+Telegram's 4096 character limit after entity parsing. You can opt into splitting
+instead:
+
+=== "takopi config"
+
+    ```sh
+    takopi config set transports.telegram.message_overflow "split"
     ```
 
 === "toml"
 
     ```toml
     [transports.telegram]
-    bot_token = "..."
-    chat_id = 123
+    message_overflow = "split" # trim | split
     ```
 
-| Key | Type | Default | Notes |
-|-----|------|---------|-------|
-| `bot_token` | string | (required) | Telegram bot token from @BotFather. |
-| `chat_id` | int | (required) | Default chat id. |
-| `allowed_user_ids` | int[] | `[]` | Allowed sender user ids. Empty disables sender filtering; when set, only these users can interact (including DMs). |
-| `message_overflow` | `"trim"`\|`"split"` | `"trim"` | How to handle long final responses. |
-| `forward_coalesce_s` | float | `1.0` | Quiet window for combining a prompt with immediately-following forwarded messages; set `0` to disable. |
-| `voice_transcription` | bool | `false` | Enable voice note transcription. |
-| `voice_max_bytes` | int | `10485760` | Max voice note size (bytes). |
-| `voice_transcription_model` | string | `"gpt-4o-mini-transcribe"` | OpenAI transcription model name. |
-| `voice_transcription_base_url` | string\|null | `null` | Override base URL for voice transcription only. |
-| `voice_transcription_api_key` | string\|null | `null` | Override API key for voice transcription only. |
-| `session_mode` | `"chat"`\|`"stateless"` | `"chat"` | Chat mode auto-resumes; stateless requires reply to continue. |
-| `show_resume_line` | bool | `false` | Show resume lines in Telegram responses. |
-| `truncate_progress_tool_calls` | bool | `true` | Remove tool-call details from progress messages (cleaner in chat). |
-| `truncate_progress_tool_calls_newline` | bool | `true` | Replace tool-call details with a newline.
-| `progress_tool_calls_max` | int | `5` | Max number of tool calls to show if truncation is off. |
-| `progress_tool_calls_inline` | bool | `false` | Show tool calls inline vs in separate lines. |
-| `show_resume_button` | bool | `true` | Show a button on the final message for resuming the conversation. |
-| `show_context_footer` | bool | `true` | Show a `ctx: <project> @<branch>` footer line on final messages. |
-| `show_progress_header` | bool | `true` | Show header with agent + elapsed time. |
-| `progress_header_template` | string | `"🤖 · working · {engine} · {elapsed} · step {step}"` | Template for progress header. |
-| `progress_line_template` | string | `"{prefix} {label}"` | Template for progress detail lines. |
-| `show_agent_name` | bool | `true` | Show the engine id in the header when `progress_header_template` uses `{engine}`. |
-| `show_progress_steps` | bool | `true` | Include the `step N` suffix in the header. |
-| `show_progress_tools` | bool | `true` | Show tool-call details when truncation is off. |
-| `show_context_header` | bool | `true` | Show a context line above progress.
-| `show_context_header_title` | string | `"Context"` | Label for the context header.
-| `show_context_header_title_emoji` | string | `"📍"` | Emoji for the context header title.
-| `show_context_header_padding` | bool | `true` | Insert a blank line after the context header.
-| `show_context_header_project_emoji` | string | `"📁"` | Emoji for the project name line.
-| `show_context_header_branch_emoji` | string | `"🌿"` | Emoji for the branch line.
-| `show_context_header_style` | `"inline"`\|`"block"` | `"block"` | Render context header in a block or inline style.
-| `show_context_header_branch_prefix` | string | `"@"` | Prefix for branch name.
-| `show_context_header_project_prefix` | string | `""` | Prefix for project name.
-| `show_context_header_project_in_branch` | bool | `true` | Include project in branch line when showing block context header.
-| `forward_edits` | bool | `false` | Forward edited progress messages to the chat. |
+Split mode sends multiple messages. Each chunk includes the footer; follow-up
+chunks add a "continued (N/M)" header.
 
-## `transports.telegram.session_mode`
+## Forum topics (optional)
 
-- `chat` (default): new messages auto-resume the last session.
-- `stateless`: you must reply to a resume line to continue a conversation.
+If you chose the **workspace** workflow during onboarding, topics are already enabled.
+Topics bind Telegram forum threads to a project/branch and persist resume tokens per
+topic, so replies keep the right context even after restarts.
 
-## `transports.telegram.topics`
+Configuration (under `[transports.telegram]`):
 
 === "takopi config"
 
     ```sh
     takopi config set transports.telegram.topics.enabled true
     takopi config set transports.telegram.topics.scope "auto"
-    takopi config set transports.telegram.topics.index_prefix "takopi"
-    takopi config set transports.telegram.topics.rename_format "{project} {branch}"
     ```
 
 === "toml"
@@ -80,172 +202,87 @@ See [Configuration](../config.md) for global defaults and full config.
     ```toml
     [transports.telegram.topics]
     enabled = true
-    scope = "auto"
-    index_prefix = "takopi"
-    rename_format = "{project} {branch}"
+    scope = "auto" # auto | main | projects | all
     ```
 
-| Key | Type | Default | Notes |
-|-----|------|---------|-------|
-| `enabled` | bool | `false` | Enable topics support. |
-| `scope` | `"auto"`\|`"main"`\|`"projects"`\|`"all"` | `"auto"` | Where topics are enabled. |
-| `index_prefix` | string | `"takopi"` | Prefix for topic names when auto-creating. |
-| `rename_format` | string | `"{project} {branch}"` | Format for renaming topics. |
-| `archive_on_unbind` | bool | `true` | Archive topic after clearing a binding.
-| `synthesize` | bool | `false` | Create a synthetic topic binding for non-topic chats.
+Requirements:
 
-## `transports.telegram.files`
+- `main`: `chat_id` must be a forum-enabled supergroup (topics enabled).
+- `projects`: each `projects.<alias>.chat_id` must point to a forum-enabled
+  supergroup for that project.
+- `all`: both the main chat and each project chat must be forum-enabled.
+- `auto`: if any project chats are configured, uses `projects`; otherwise `main`.
+- The bot needs the **Manage Topics** permission in the relevant chat(s).
 
-=== "takopi config"
+Commands:
 
-    ```sh
-    takopi config set transports.telegram.files.enabled true
-    takopi config set transports.telegram.files.auto_put true
-    takopi config set transports.telegram.files.auto_put_mode "upload"
-    takopi config set transports.telegram.files.uploads_dir "incoming"
-    takopi config set transports.telegram.files.allowed_user_ids "[123456789]"
-    takopi config set transports.telegram.files.deny_globs '[".git/**", ".env", ".envrc", "**/*.pem", "**/.ssh/**"]'
-    ```
+- `main`: `/topic <project> @branch` creates a topic in the main chat and binds it.
+- `projects`: `/topic @branch` creates a topic in the project chat and binds it.
+- `all`: use `/topic <project> @branch` in the main chat, or `/topic @branch` in
+  project chats.
+- `/ctx` shows the bound context and stored session engines inside topics.
+  Outside topics, `/ctx set ...` binds the chat context.
+- `/new` inside a topic clears stored resume tokens for that topic.
 
-=== "toml"
+State is stored in `telegram_topics_state.json` alongside the config file.
+Delete it to reset all topic bindings and stored sessions.
 
-    ```toml
-    [transports.telegram.files]
-    enabled = true
-    auto_put = true
-    auto_put_mode = "upload" # upload | prompt
-    uploads_dir = "incoming"
-    allowed_user_ids = [123456789]
-    deny_globs = [".git/**", ".env", ".envrc", "**/*.pem", "**/.ssh/**"]
-    ```
+Note: main chat topics do not assume a default project; topics must be bound
+before running without directives.
 
-| Key | Type | Default | Notes |
-|-----|------|---------|-------|
-| `enabled` | bool | `false` | Enable file transfer. |
-| `auto_put` | bool | `false` | Auto-save files without prompting. |
-| `auto_put_mode` | `"upload"`\|`"prompt"` | `"prompt"` | File handling behavior. |
-| `uploads_dir` | string | `"incoming"` | Directory for uploads.
-| `allowed_user_ids` | int[] | `[]` | Allowed senders for file uploads. Empty disables sender filtering; when set, only these users can upload.
-| `deny_globs` | string[] | `[]` | Glob patterns that are rejected even when a user is allowed.
+## Outbox model
 
-## `transports.telegram.notifications`
+- Single worker processes one op at a time.
+- Each op is keyed; only one pending op per key.
+- New ops with the same key overwrite the payload but **do not** reset
+  `queued_at` (fairness).
 
-```toml
-[transports.telegram.notifications]
-# Try `notify` first; fall back to `mention`.
-mode = "notify" # notify | mention
-```
+Keys (include `chat_id` to avoid cross-chat collisions):
 
-## `transports.telegram.voice_transcription`
+- `("edit", chat_id, message_id)` for edits (coalesced).
+- `("delete", chat_id, message_id)` for deletes.
+- `("send", chat_id, replace_message_id)` when replacing a progress message.
+- Unique key for normal sends.
 
-```toml
-[transports.telegram.voice_transcription]
-enabled = true
-model = "gpt-4o-mini-transcribe"
-```
+Scheduling:
 
-## `transports.telegram.voice_transcription` (direct overrides)
+- Ordered by `(priority, queued_at)`.
+- Priorities: send=0, delete=1, edit=2.
+- Within a priority tier, the oldest pending op runs first.
 
-```toml
-[transports.telegram.voice_transcription]
-api_key = "..." # override base api key
-base_url = "https://api.openai.com/v1" # override base api url
-```
+## Rate limiting + backoff
 
-## `transports.telegram.defaults`
+- Per-chat pacing is computed from `private_chat_rps` and `group_chat_rps`.
+  Defaults: 1.0 msg/s for private, 20/60 msg/s for groups (≈1 message every 3s).
+- Pacing is currently enforced via a single global `next_at`; per-chat
+  `next_at` is a future consideration if we ever run multiple chats in parallel.
+- The worker waits until `max(next_at, retry_at)` before executing the next op.
+- On 429, `RetryAfter` is raised using `parameters.retry_after` when present;
+  if missing, we fall back to a 5s delay. The outbox sets `retry_at` and
+  requeues the op if no newer op for the same key has arrived.
 
-You can set per-chat defaults for:
+## Error handling
 
-- `engine`
-- `project`
-- `branch`
+- Non-429 errors are logged and dropped (no retry).
+- On `RetryAfter`, the op is retried unless a newer op superseded the same key.
 
-## `transports.telegram.shortcuts`
+## Replace progress messages
 
-Define in-chat shortcuts:
+`send_message(replace_message_id=...)`:
 
-```toml
-[transports.telegram.shortcuts]
-"/prod" = "/backend @main"
-```
+- Drops any pending edit for that progress message.
+- Enqueues the send at highest priority.
+- If the send succeeds, enqueues a delete for the old progress message.
 
-## `transports.telegram.commands`
+This keeps the final message first and avoids deleting progress if the send
+fails.
 
-=== "takopi config"
+## getUpdates
 
-    ```sh
-    takopi config set transports.telegram.commands.enabled true
-    takopi config set transports.telegram.commands.manage_mode "auto"
-    takopi config set transports.telegram.commands.sanitize_quotes "trim"
-    ```
+`get_updates` bypasses the outbox and retries on `RetryAfter` by sleeping
+for the provided delay.
 
-=== "toml"
+## Close semantics
 
-    ```toml
-    [transports.telegram.commands]
-    enabled = true
-    manage_mode = "auto" # auto | on | off
-    sanitize_quotes = "trim" # trim | strip | none
-    ```
-
-| Key | Type | Default | Notes |
-|-----|------|---------|-------|
-| `enabled` | bool | `true` | Enable Telegram commands. |
-| `manage_mode` | `"auto"`\|`"on"`\|`"off"` | `"auto"` | Refresh bot commands on startup. |
-| `sanitize_quotes` | `"trim"`\|`"strip"`\|`"none"` | `"trim"` | How to sanitize quoted replies passed into the prompt. |
-
-## `transports.telegram.commands` (continued)
-
-| Key | Type | Default | Notes |
-|-----|------|---------|-------|
-| `summary_prompt` | string | `"You are a helpful assistant."` | System prompt for summary command.
-| `summary_temperature` | float | `0.2` | Summary temperature.
-| `summary_max_tokens` | int | `512` | Summary max tokens.
-| `topics_prompt` | string | `"You are a helpful assistant."` | System prompt for topics commands.
-| `topics_temperature` | float | `0.2` | Summary temperature.
-| `topics_max_tokens` | int | `512` | Summary max tokens.
-| `topics_summarize_message_limit` | int | `50` | Max messages to summarize.
-| `topics_summarize_latest` | bool | `false` | Summarize only latest message.
-| `topics_prompt_style` | `"short"`\|`"long"` | `"short"` | Prompt shape for topics response.
-| `topics_reply_style` | `"short"`\|`"long"` | `"short"` | Response shape for topics.
-| `topics_progress_placeholder` | string | `"Summarizing…"` | Placeholder while topics summary runs.
-| `topics_summary_template` | string | `"{summary}"` | Template for summary output.
-| `topics_summary_entry_template` | string | `"- {summary}"` | Template for the bullet entries.
-| `topics_summary_none` | string | `"No recent messages."` | Output when no messages.
-| `topics_summary_intro` | string | `"Recent messages"` | Title for summary.
-| `topics_summary_show_chat_label` | bool | `true` | Show chat label in summary.
-
-## `transports.telegram.commands` (chat sessions)
-
-| Key | Type | Default | Notes |
-|-----|------|---------|-------|
-| `sessions_enabled` | bool | `true` | Store session mappings in memory.
-| `sessions_idle_ttl_s` | float | `86400` | Session TTL.
-| `sessions_store_path` | string | `"telegram_sessions.json"` | Session store file.
-| `session_mode` | `"chat"`\|`"stateless"` | `"chat"` | How the chat handles new messages. |
-| `final_resume_line` | `"auto"`\|`"always"`\|`"never"` | `"auto"` | When to show resume lines for chat sessions. |
-
-## `transports.telegram.commands` (allrepos)
-
-| Key | Type | Default | Notes |
-|-----|------|---------|-------|
-| `allrepos_enabled` | bool | `false` | Enable allrepos command.
-| `allrepos_default_glob` | string | `"**/*"` | Default file glob.
-| `allrepos_auto_generate_glob` | bool | `true` | Auto-apply exclude filters if absent.
-| `allrepos_default_exclude` | string | `".git/**"` | Default exclude glob.
-
-## `transports.telegram.commands` (swarm)
-
-| Key | Type | Default | Notes |
-|-----|------|---------|-------|
-| `swarm_enabled` | bool | `false` | Enable swarm command.
-| `swarm_branch_prefix` | string | `"swarm"` | Prefix for swarm branches.
-| `swarm_branch_length` | int | `8` | Random suffix length.
-| `swarm_topic_prefix` | string | `"swarm"` | Prefix for swarm topics.
-| `swarm_topic_length` | int | `8` | Random suffix length.
-
-## Related
-
-- [Commands & directives](commands-and-directives.md)
-- [Transport: Telegram](transports/telegram.md)
-- [Tutorial: file transfer](../how-to/file-transfer.md)
+`TelegramClient.close()` shuts down the outbox and closes the HTTP client.
+Pending ops are failed with `None` (best-effort).
