@@ -44,6 +44,7 @@ class TelegramIncomingMessage:
     voice: TelegramVoice | None = None
     document: TelegramDocument | None = None
     raw: dict[str, Any] | None = None
+    update_id: int | None = None
 
     @property
     def is_private(self) -> bool:
@@ -61,6 +62,7 @@ class TelegramCallbackQuery:
     data: str | None
     sender_id: int | None
     raw: dict[str, Any] | None = None
+    update_id: int | None = None
 
 
 TelegramIncomingUpdate = TelegramIncomingMessage | TelegramCallbackQuery
