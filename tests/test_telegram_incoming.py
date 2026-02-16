@@ -64,6 +64,7 @@ def test_parse_incoming_update_maps_fields() -> None:
     assert msg.document is None
     assert msg.raw
     assert msg.raw["message_id"] == 10
+    assert msg.update_id == 1
 
 
 def test_parse_incoming_update_ignores_implicit_topic_reply() -> None:
@@ -97,9 +98,13 @@ def test_parse_incoming_update_ignores_implicit_topic_reply() -> None:
     assert msg.reply_to_text is None
     assert msg.reply_to_is_bot is None
     assert msg.reply_to_username is None
+<<<<<<< HEAD
     assert msg.quote_text is None
     assert msg.quote_position is None
     assert msg.quote_is_manual is None
+=======
+    assert msg.update_id == 1
+>>>>>>> upstream/master
 
 
 def test_parse_incoming_update_filters_non_matching_chat() -> None:
@@ -312,6 +317,7 @@ def test_parse_incoming_update_callback_query() -> None:
     assert msg.callback_query_id == "cbq-1"
     assert msg.data == "takopi:cancel"
     assert msg.sender_id == 321
+    assert msg.update_id == 1
 
 
 def test_parse_incoming_update_topic_fields() -> None:

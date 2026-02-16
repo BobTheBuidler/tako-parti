@@ -1,5 +1,31 @@
 # changelog
 
+## v0.22.1 (2026-02-10)
+
+### fixes
+
+- preserve ordered list numbering when nested list indentation is malformed in telegram render output [#202](https://github.com/banteg/takopi/pull/202)
+
+## v0.22.0 (2026-02-10)
+
+### changes
+
+- support Codex `phase` values and unknown action kinds in commentary rendering [#201](https://github.com/banteg/takopi/pull/201)
+
+## v0.21.5 (2026-02-08)
+
+### fixes
+
+- dedupe redelivered telegram updates to prevent duplicate runs in DMs [#198](https://github.com/banteg/takopi/pull/198)
+
+### changes
+
+- read package version from metadata instead of a hardcoded `__version__` constant
+
+### docs
+
+- rotate telegram invite link
+
 ## v0.21.4 (2026-01-22)
 
 ### changes
