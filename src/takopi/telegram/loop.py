@@ -1578,7 +1578,8 @@ async def run_main_loop(
                     ambient_context = chat_bound_context
                 else:
                     ambient_context = _merge_topic_context(
-                        chat_project=chat_project, bound=None)
+                        chat_project=chat_project, bound=None
+                    )
                 return TelegramMsgContext(
                     chat_id=chat_id,
                     thread_id=msg.thread_id,
