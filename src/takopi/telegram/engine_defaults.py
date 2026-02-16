@@ -53,22 +53,6 @@ async def resolve_engine_for_message(
             chat_default=chat_default,
             project_default=project_default,
         )
-    if topic_default is not None:
-        return EngineResolution(
-            engine=topic_default,
-            source="topic_default",
-            topic_default=topic_default,
-            chat_default=chat_default,
-            project_default=project_default,
-        )
-    if chat_default is not None:
-        return EngineResolution(
-            engine=chat_default,
-            source="chat_default",
-            topic_default=topic_default,
-            chat_default=chat_default,
-            project_default=project_default,
-        )
     if project_default is not None:
         return EngineResolution(
             engine=project_default,

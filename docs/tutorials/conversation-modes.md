@@ -52,7 +52,7 @@ Tip: set a default engine in config (global or per project).
     ...
     codex resume abc123
 
-To continue the same session, **reply** to a message that has a resume line:
+To continue the same session, **reply** to a message with a resume line:
 
 !!! takopi "Takopi"
     💪 · done · codex · 8s
@@ -115,12 +115,6 @@ Even in chat mode, replying to a message with a resume line takes precedence and
 - [Chat sessions](../how-to/chat-sessions.md)
 - [Forum topics](../how-to/topics.md)
 - [Commands & directives](../reference/commands-and-directives.md)
-
-## Next
-
-Now that you know which mode you want, move on to your first run:
-
-[First run →](first-run.md)
 
 ## Next
 

@@ -50,20 +50,6 @@ async def test_resolve_engine_for_message_sources(tmp_path) -> None:
     assert resolved.source == "directive"
     assert resolved.engine == "codex"
 
-    await topic_store.clear_default_engine(1, 10)
-    resolved = await resolve_engine_for_message(
-        runtime=runtime,
-        context=RunContext(project="proj"),
-        explicit_engine=None,
-        chat_id=1,
-        topic_key=(1, 10),
-        topic_store=topic_store,
-        chat_prefs=chat_prefs,
-    )
-    assert resolved.source == "chat_default"
-    assert resolved.engine == "pi"
-
-    await chat_prefs.clear_default_engine(1)
     resolved = await resolve_engine_for_message(
         runtime=runtime,
         context=RunContext(project="proj"),
@@ -75,3 +61,15 @@ async def test_resolve_engine_for_message_sources(tmp_path) -> None:
     )
     assert resolved.source == "project_default"
     assert resolved.engine == "pi"
+
+    resolved = await resolve_engine_for_message(
+        runtime=runtime,
+        context=None,
+        explicit_engine=None,
+        chat_id=1,
+        topic_key=(1, 10),
+        topic_store=topic_store,
+        chat_prefs=chat_prefs,
+    )
+    assert resolved.source == "global_default"
+    assert resolved.engine == "codex"

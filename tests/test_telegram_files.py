@@ -49,7 +49,7 @@ def test_split_command_args_falls_back_on_bad_quotes() -> None:
 
 
 def test_parse_file_command_unknown_command() -> None:
-    command, rest, error = tg_files.parse_file_command("nope arg")
+    command, rest, error = tg_files.parse_file_command("get arg")
     assert command is None
     assert rest == "arg"
     assert error == tg_files.file_usage()
