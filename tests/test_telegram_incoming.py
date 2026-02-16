@@ -98,13 +98,10 @@ def test_parse_incoming_update_ignores_implicit_topic_reply() -> None:
     assert msg.reply_to_text is None
     assert msg.reply_to_is_bot is None
     assert msg.reply_to_username is None
-<<<<<<< HEAD
     assert msg.quote_text is None
     assert msg.quote_position is None
     assert msg.quote_is_manual is None
-=======
     assert msg.update_id == 1
->>>>>>> upstream/master
 
 
 def test_parse_incoming_update_filters_non_matching_chat() -> None:
