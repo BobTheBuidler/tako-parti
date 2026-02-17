@@ -70,7 +70,7 @@ When `allowed_user_ids` is set, updates without a sender id (for example, some c
 
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
-| `enabled` | bool | `false` | Enable `/file put` and `/file get`. |
+| `enabled` | bool | `false` | Enable `/file put`. |
 | `auto_put` | bool | `true` | Auto-save uploads. |
 | `auto_put_mode` | `"upload"`\|`"prompt"` | `"upload"` | Whether uploads also start a run. |
 | `uploads_dir` | string | `"incoming"` | Relative path inside the repo/worktree. |
@@ -80,7 +80,6 @@ When `allowed_user_ids` is set, updates without a sender id (for example, some c
 File size limits (not configurable):
 
 - uploads: 20 MiB
-- downloads: 50 MiB
 
 ## `projects.<alias>`
 

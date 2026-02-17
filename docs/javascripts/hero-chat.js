@@ -70,7 +70,7 @@
       if (step === 0) {
         statusEl.textContent = `starting · codex · ${elapsed}s`;
       } else {
-        statusEl.textContent = `working · codex · ${elapsed}s · step ${step}`;
+        statusEl.textContent = `🤖 · working · codex · ${elapsed}s · step ${step}`;
       }
     }, 1000);
 
@@ -82,7 +82,7 @@
       step++;
 
       const elapsed = Math.floor((Date.now() - startTime) / 1000);
-      statusEl.textContent = `working · codex · ${elapsed}s · step ${step}`;
+      statusEl.textContent = `🤖 · working · codex · ${elapsed}s · step ${step}`;
 
       const prevRunning = toolsDiv.querySelector('.running');
       if (prevRunning) prevRunning.classList.remove('running');
@@ -113,7 +113,7 @@
 
     // Show done state with answer and resume line
     botMsg.innerHTML = `
-      <div class="status">done · codex · ${finalElapsed}s · step ${step}</div>
+      <div class="status">💪 · done · codex · ${finalElapsed}s · step ${step}</div>
       <div class="answer">${ANSWER}</div>
       <div class="resume">${RESUME_CMD}</div>
     `;

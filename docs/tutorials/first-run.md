@@ -16,7 +16,7 @@ takopi
 Takopi keeps running in your terminal. In Telegram, your bot will post a startup message like:
 
 !!! takopi "Takopi"
-    🐙 takopi is ready
+    🤖 Robob is ready
 
     default: codex<br>
     engines: codex, claude<br>
@@ -54,7 +54,7 @@ Takopi immediately posts a progress message and updates it as the agent works:
 As the agent calls tools and makes progress, you'll see updates like:
 
 !!! takopi "Takopi"
-    working · codex · 12s · step 3
+    🤖 · working · codex · 12s · step 3
 
     ✓ tool: read: readme.md<br>
     ✓ tool: read: docs/index.md<br>
@@ -68,7 +68,7 @@ When the agent finishes, Takopi sends a new message and replaces the progress me
 
 
 !!! takopi "Takopi"
-    done · codex · 11s · step 5
+    💪 · done · codex · 11s · step 5
     
     Takopi is a Telegram bridge for AI coding agents (Codex, Claude Code, OpenCode, Pi). It lets you run agents from chat, manage multiple projects and git worktrees, stream progress (commands, file changes, elapsed time), and resume sessions from either chat or terminal. It also supports file transfer, group topics mapped to repo/branch contexts, and multiple engines via chat commands, with a plugin system for engines/transports/commands.
 
@@ -91,7 +91,7 @@ Use `/new` any time you want a fresh thread.
 **If you're in stateless mode:** **reply** to a message that has a resume line.
 
 !!! takopi "Takopi"
-    done · codex · 11s · step 5
+    💪 · done · codex · 11s · step 5
 
     !!! user "You"
         what command line arguments does it support?
@@ -112,7 +112,7 @@ Sometimes you want to stop a run in progress—maybe you realize you asked the w
 While the progress message is showing, tap the **cancel** button or reply to it with:
 
 !!! takopi "Takopi"
-    working · codex · 12s · step 3
+    🤖 · working · codex · 12s · step 3
 
     !!! user "You"
         /cancel
@@ -141,7 +141,7 @@ This uses Claude Code for just this message. The resume line will show `claude -
 Available prefixes depend on what you have installed: `/codex`, `/claude`, `/opencode`, `/pi`.
 
 !!! tip "Set a default engine"
-    Use `/agent set claude` to make this chat (or topic) use Claude by default. Run `/agent` to see what's set.
+    Set `default_engine` in your config (or per project) if you want a non-Codex default.
 
 ## What just happened
 
@@ -165,7 +165,7 @@ The agent CLI isn't on your PATH. Install the CLI for the engine you're using (e
 
 **Bot doesn't respond at all**
 
-Check that Takopi is still running in your terminal. You should also see a startup message ("takopi is ready") from the bot in Telegram. If not, restart it.
+Check that Takopi is still running in your terminal. You should also see a startup message ("Robob is ready") from the bot in Telegram. If not, restart it.
 
 **Resume doesn't work (starts a new conversation)**
 

@@ -35,7 +35,7 @@ def split_command_args(text: str) -> tuple[str, ...]:
 
 
 def file_usage() -> str:
-    return "usage: `/file put <path>` or `/file get <path>`"
+    return "usage: `/file put <path>`"
 
 
 def parse_file_command(args_text: str) -> tuple[str | None, str, str | None]:
@@ -44,7 +44,7 @@ def parse_file_command(args_text: str) -> tuple[str | None, str, str | None]:
         return None, "", file_usage()
     command = tokens[0].lower()
     rest = " ".join(tokens[1:]).strip()
-    if command not in {"put", "get"}:
+    if command != "put":
         return None, rest, file_usage()
     return command, rest, None
 

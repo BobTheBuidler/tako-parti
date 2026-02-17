@@ -50,3 +50,20 @@ def test_resolve_default_engine_unknown(tmp_path: Path) -> None:
             config_path=tmp_path / "takopi.toml",
             engine_ids=["codex"],
         )
+
+
+def test_resolve_default_engine_alias_maps_to_codex(tmp_path: Path) -> None:
+    settings = TakopiSettings.model_validate(
+        {
+            "transport": "telegram",
+            "transports": {"telegram": {"bot_token": "token", "chat_id": 123}},
+            "default_engine": "robob",
+        }
+    )
+    resolved = runtime_loader.resolve_default_engine(
+        override=None,
+        settings=settings,
+        config_path=tmp_path / "takopi.toml",
+        engine_ids=["codex"],
+    )
+    assert resolved == "codex"

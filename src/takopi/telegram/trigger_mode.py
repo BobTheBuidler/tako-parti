@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
+from ..engine_aliases import ENGINE_DIRECTIVE_IDS
 from ..transport_runtime import TransportRuntime
 from .chat_prefs import ChatPrefsStore
 from .commands.parse import _parse_slash_command
@@ -61,7 +62,7 @@ def should_trigger_run(
         return False
     if command_id in reserved_chat_commands or command_id in command_ids:
         return True
-    engine_ids = {engine.lower() for engine in runtime.available_engine_ids()}
+    engine_ids = {engine.lower() for engine in ENGINE_DIRECTIVE_IDS}
     if command_id in engine_ids:
         return True
     project_aliases = {alias.lower() for alias in runtime.project_aliases()}

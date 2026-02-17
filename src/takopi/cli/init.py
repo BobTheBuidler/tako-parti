@@ -7,6 +7,7 @@ import typer
 
 from ..config import ConfigError, write_config
 from ..config_migrations import migrate_config
+from ..engine_aliases import PUBLIC_ENGINE_ID
 from ..ids import RESERVED_CHAT_COMMANDS
 from ..settings import TakopiSettings, validate_settings_data
 from .config import _config_path_display
@@ -76,7 +77,7 @@ def run_init(
         raise ConfigError(
             f"Invalid project alias {alias!r}; aliases must not match engine ids."
         )
-    if alias_key in RESERVED_CHAT_COMMANDS:
+    if alias_key == PUBLIC_ENGINE_ID or alias_key in RESERVED_CHAT_COMMANDS:
         raise ConfigError(
             f"Invalid project alias {alias!r}; aliases must not match reserved commands."
         )

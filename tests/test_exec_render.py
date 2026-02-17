@@ -6,6 +6,7 @@ from takopi.markdown import (
     HARD_BREAK,
     MarkdownFormatter,
     STATUS,
+    _command_log_line,
     action_status,
     assemble_markdown_parts,
     format_elapsed,
@@ -43,19 +44,21 @@ SAMPLE_EVENTS: list[TakopiEvent] = [
 
 
 def test_render_event_cli_sample_events() -> None:
+    cmd_line = _command_log_line(Action(id="a-1", kind="command", title="bash -lc ls"))
     out: list[str] = []
     for evt in SAMPLE_EVENTS:
         out.extend(render_event_cli(evt))
 
     assert out == [
         "codex",
-        "▸ `bash -lc ls`",
-        "✓ `bash -lc ls`",
+        f"▸ `{cmd_line}`",
+        f"✓ `{cmd_line}`",
         "✓ Checking repository root for README",
     ]
 
 
 def test_render_event_cli_handles_action_kinds() -> None:
+    cmd_line = _command_log_line(Action(id="c-1", kind="command", title="pytest -q"))
     events: list[TakopiEvent] = [
         action_completed(
             "c-1", "command", "pytest -q", ok=False, detail={"exit_code": 1}
@@ -86,7 +89,7 @@ def test_render_event_cli_handles_action_kinds() -> None:
     for evt in events:
         out.extend(render_event_cli(evt))
 
-    assert any(line.startswith("✗ `pytest -q` (exit 1)") for line in out)
+    assert any(line.startswith(f"✗ `{cmd_line}` (exit 1)") for line in out)
     assert any(
         "searched: python jsonlines parser handle unknown fields" in line
         for line in out
@@ -163,15 +166,16 @@ def test_progress_renderer_renders_progress_and_final() -> None:
     formatter = MarkdownFormatter(max_actions=5)
     progress_parts = formatter.render_progress_parts(state, elapsed_s=3.0)
     progress = assemble_markdown_parts(progress_parts)
-    assert progress.startswith("working · codex · 3s · step 2")
+    assert progress.startswith("🤖 · working · codex · 3s · step 2")
     assert "✓ `bash -lc ls`" in progress
+    assert "✓ Checking repository root for README" in progress
     assert "`codex resume 0199a213-81c0-7800-8aa1-bbab2a035a53`" in progress
 
     final_parts = formatter.render_final_parts(
         state, elapsed_s=3.0, status="done", answer="answer"
     )
     final = assemble_markdown_parts(final_parts)
-    assert final.startswith("done · codex · 3s · step 2")
+    assert final.startswith("💪 · done · codex · 3s · step 2")
     assert "✓ `bash -lc ls`" not in final
     assert "Checking repository root for README" not in final
     assert "answer" in final
@@ -191,6 +195,7 @@ def test_progress_renderer_footer_includes_ctx_before_resume() -> None:
     )
     formatter = MarkdownFormatter(max_actions=5)
     parts = formatter.render_progress_parts(state, elapsed_s=0.0)
+    assert parts.header.startswith("🤖 · working · feat/name · 0s · step 2")
     assert parts.footer == (
         "`ctx: z80 @feat/name`"
         f"{HARD_BREAK}`codex resume 0199a213-81c0-7800-8aa1-bbab2a035a53`"
@@ -405,4 +410,4 @@ def test_progress_renderer_ignores_missing_action_id() -> None:
     header = assemble_markdown_parts(
         formatter.render_progress_parts(tracker.snapshot(), elapsed_s=0.0)
     )
-    assert header.startswith("working · codex · 0s")
+    assert header.startswith("🤖 · working · codex · 0s")

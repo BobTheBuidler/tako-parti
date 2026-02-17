@@ -6,6 +6,7 @@ import click
 import typer
 
 from takopi import cli, engines, plugins
+from takopi.engine_aliases import INTERNAL_ENGINE_ID
 from tests.plugin_fixtures import FakeEntryPoint, install_entrypoints
 
 
@@ -42,9 +43,10 @@ def test_cli_registers_engine_commands_sorted(engine_entrypoints) -> None:
     app = cli.create_app()
     command_names = [cmd.name for cmd in app.registered_commands]
     engine_ids = engines.list_backend_ids()
-    assert set(engine_ids) <= set(command_names)
-    engine_commands = [name for name in command_names if name in engine_ids]
-    assert engine_commands == engine_ids
+    assert INTERNAL_ENGINE_ID in engine_ids
+    assert INTERNAL_ENGINE_ID in command_names
+    non_internal_ids = [engine_id for engine_id in engine_ids if engine_id != INTERNAL_ENGINE_ID]
+    assert not any(engine_id in command_names for engine_id in non_internal_ids)
 
 
 def test_engine_commands_do_not_expose_engine_id_option(
@@ -52,7 +54,7 @@ def test_engine_commands_do_not_expose_engine_id_option(
 ) -> None:
     app = cli.create_app()
     group = cast(click.Group, typer.main.get_command(app))
-    engine_ids = engines.list_backend_ids()
+    engine_ids = [INTERNAL_ENGINE_ID]
 
     ctx = group.make_context("takopi", [])
 

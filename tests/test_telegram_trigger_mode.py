@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from takopi.config import ProjectConfig, ProjectsConfig
+from takopi.engine_aliases import PUBLIC_ENGINE_ID
 from takopi.ids import RESERVED_CHAT_COMMANDS
 from takopi.router import AutoRouter, RunnerEntry
 from takopi.runners.mock import Return, ScriptRunner
@@ -56,6 +57,13 @@ def test_should_trigger_run_mentions() -> None:
 def test_should_trigger_run_engine_and_project() -> None:
     runtime = _runtime()
     assert should_trigger_run(
+        _msg(f"/{PUBLIC_ENGINE_ID} hello"),
+        bot_username=None,
+        runtime=runtime,
+        command_ids=set(),
+        reserved_chat_commands=set(RESERVED_CHAT_COMMANDS),
+    )
+    assert not should_trigger_run(
         _msg("/codex hello"),
         bot_username=None,
         runtime=runtime,
@@ -112,7 +120,7 @@ def test_should_trigger_run_ignores_implicit_topic_reply_to_root() -> None:
 def test_should_trigger_run_known_commands() -> None:
     runtime = _runtime()
     assert should_trigger_run(
-        _msg("/agent"),
+        _msg("/file put readme.md"),
         bot_username=None,
         runtime=runtime,
         command_ids=set(),
@@ -131,6 +139,13 @@ def test_should_trigger_run_ignores_unknown_commands() -> None:
     runtime = _runtime()
     assert not should_trigger_run(
         _msg("/wat"),
+        bot_username=None,
+        runtime=runtime,
+        command_ids=set(),
+        reserved_chat_commands=set(RESERVED_CHAT_COMMANDS),
+    )
+    assert not should_trigger_run(
+        _msg("/agent"),
         bot_username=None,
         runtime=runtime,
         command_ids=set(),

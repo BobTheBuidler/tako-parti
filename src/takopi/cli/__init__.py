@@ -17,6 +17,7 @@ from ..config import (
 )
 from ..config_migrations import migrate_config
 from ..commands import get_command
+from ..engine_aliases import INTERNAL_ENGINE_ID
 from ..engines import get_backend, list_backend_ids
 from ..ids import RESERVED_CHAT_COMMANDS, RESERVED_COMMAND_IDS, RESERVED_ENGINE_IDS
 from ..lockfile import LockError, LockHandle, acquire_lock, token_fingerprint
@@ -140,7 +141,8 @@ def _engine_ids_for_cli() -> list[str]:
     try:
         config, _ = load_or_init_config()
     except ConfigError:
-        return list_backend_ids()
+        backend_ids = list_backend_ids()
+        return [INTERNAL_ENGINE_ID] if INTERNAL_ENGINE_ID in backend_ids else []
     raw_plugins = config.get("plugins")
     if isinstance(raw_plugins, dict):
         enabled = raw_plugins.get("enabled")
@@ -152,7 +154,8 @@ def _engine_ids_for_cli() -> list[str]:
             ]
             if not allowlist:
                 allowlist = None
-    return list_backend_ids(allowlist=allowlist)
+    backend_ids = list_backend_ids(allowlist=allowlist)
+    return [INTERNAL_ENGINE_ID] if INTERNAL_ENGINE_ID in backend_ids else []
 
 
 def create_app() -> typer.Typer:

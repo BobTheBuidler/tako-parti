@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from ...commands import get_command
 from ...config import ConfigError
+from ...engine_aliases import ENGINE_DIRECTIVE_IDS
 from ...ids import RESERVED_COMMAND_IDS, is_valid_id
 from ...logging import get_logger
 from ...plugins import COMMAND_GROUP, list_entrypoints
@@ -25,7 +26,7 @@ def build_bot_commands(
 ) -> list[dict[str, str]]:
     commands: list[dict[str, str]] = []
     seen: set[str] = set()
-    for engine_id in runtime.available_engine_ids():
+    for engine_id in ENGINE_DIRECTIVE_IDS:
         cmd = engine_id.lower()
         if cmd in seen:
             continue
@@ -73,23 +74,25 @@ def build_bot_commands(
     for cmd, description in [
         ("new", "start a new thread"),
         ("ctx", "show or update context"),
-        ("agent", "set default engine"),
-        ("model", "set model override"),
-        ("reasoning", "set reasoning override"),
-        ("trigger", "set trigger mode"),
     ]:
         if cmd in seen:
             continue
         commands.append({"command": cmd, "description": description})
         seen.add(cmd)
     if include_topics:
-        for cmd, description in [("topic", "create or bind a topic")]:
+        for cmd, description in [
+            ("topic", "create or bind a topic"),
+            ("swarm", "fork a branch and create topics"),
+            ("pause", "pause this topic"),
+            ("resume", "resume this topic"),
+            ("allrepos", "run a query in all repos"),
+        ]:
             if cmd in seen:
                 continue
             commands.append({"command": cmd, "description": description})
             seen.add(cmd)
     if include_file and "file" not in seen:
-        commands.append({"command": "file", "description": "upload or fetch files"})
+        commands.append({"command": "file", "description": "upload files"})
         seen.add("file")
     if "cancel" not in seen:
         commands.append({"command": "cancel", "description": "cancel run"})
@@ -107,7 +110,7 @@ def build_bot_commands(
 
 def _reserved_commands(runtime: TransportRuntime) -> set[str]:
     return {
-        *{engine.lower() for engine in runtime.engine_ids},
+        *{engine.lower() for engine in ENGINE_DIRECTIVE_IDS},
         *{alias.lower() for alias in runtime.project_aliases()},
         *RESERVED_COMMAND_IDS,
     }

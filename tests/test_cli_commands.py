@@ -74,6 +74,25 @@ def test_init_declines_overwrite(monkeypatch, tmp_path: Path) -> None:
     assert result.exit_code == 1
 
 
+def test_cli_registers_only_codex_engine(monkeypatch) -> None:
+    config = _min_config()
+    config["plugins"] = {"enabled": ["codex", "openai"]}
+    monkeypatch.setattr(cli, "load_or_init_config", lambda: (config, Path("x")))
+
+    def _list_backend_ids(allowlist=None):
+        assert allowlist == ["codex", "openai"]
+        return ["codex", "openai"]
+
+    monkeypatch.setattr(cli, "list_backend_ids", _list_backend_ids)
+
+    runner = CliRunner()
+    result = runner.invoke(cli.create_app(), ["--help"])
+
+    assert result.exit_code == 0
+    assert "Run with the codex engine." in result.output
+    assert "Run with the openai engine." not in result.output
+
+
 def test_plugins_cmd_loads_and_reports_errors(monkeypatch) -> None:
     entrypoints = {
         ENGINE_GROUP: [

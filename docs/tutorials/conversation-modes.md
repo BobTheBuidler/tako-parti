@@ -20,7 +20,7 @@ This page explains what those settings mean and how to change them.
     explain what this repo does
 
 !!! takopi "Takopi"
-    done · codex · 8s
+    💪 · done · codex · 8s
     ...
 
 !!! user "You"
@@ -38,7 +38,7 @@ To pin a project or branch for the chat, use:
 
 `/new` clears the session but keeps the bound context.
 
-Tip: set a default engine for this chat with `/agent set claude`.
+Tip: set a default engine in config (global or per project).
 
 ## Stateless (reply-to-continue)
 
@@ -48,14 +48,14 @@ Tip: set a default engine for this chat with `/agent set claude`.
     explain what this repo does
 
 !!! takopi "Takopi"
-    done · codex · 8s
+    💪 · done · codex · 8s
     ...
     codex resume abc123
 
 To continue the same session, **reply** to a message with a resume line:
 
 !!! takopi "Takopi"
-    done · codex · 8s
+    💪 · done · codex · 8s
 
     !!! user "You"
         now add tests

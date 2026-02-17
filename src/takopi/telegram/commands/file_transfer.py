@@ -20,8 +20,6 @@ from ..files import (
     parse_file_prompt,
     resolve_path_within_root,
     write_bytes_atomic,
-    ZipTooLargeError,
-    zip_directory,
 )
 from ..topic_state import TopicStateStore
 from ..topics import _maybe_update_topic_context, _topic_key
@@ -32,7 +30,6 @@ if TYPE_CHECKING:
     from ..bridge import TelegramBridgeConfig
 
 FILE_PUT_USAGE = "usage: `/file put <path>`"
-FILE_GET_USAGE = "usage: `/file get <path>`"
 
 
 @dataclass(slots=True)
@@ -294,10 +291,10 @@ async def _handle_file_command(
     if error is not None:
         await reply(text=error)
         return
-    if command == "put":
-        await _handle_file_put(cfg, msg, rest, ambient_context, topic_store)
-    else:
-        await _handle_file_get(cfg, msg, rest, ambient_context, topic_store)
+    if command != "put":
+        await reply(text=FILE_PUT_USAGE)
+        return
+    await _handle_file_put(cfg, msg, rest, ambient_context, topic_store)
 
 
 async def _handle_file_put_default(
@@ -485,102 +482,3 @@ async def _save_file_put_group(
         saved=saved,
         failed=failed,
     )
-
-
-async def _handle_file_get(
-    cfg: TelegramBridgeConfig,
-    msg: TelegramIncomingMessage,
-    args_text: str,
-    ambient_context: RunContext | None,
-    topic_store: TopicStateStore | None,
-) -> None:
-    reply = make_reply(cfg, msg)
-    if not await _check_file_permissions(cfg, msg):
-        return
-    try:
-        resolved = cfg.runtime.resolve_message(
-            text=args_text,
-            reply_text=msg.reply_to_text,
-            ambient_context=ambient_context,
-            chat_id=msg.chat_id,
-        )
-    except DirectiveError as exc:
-        await reply(text=f"error:\n{exc}")
-        return
-    topic_key = _topic_key(msg, cfg) if topic_store is not None else None
-    await _maybe_update_topic_context(
-        cfg=cfg,
-        topic_store=topic_store,
-        topic_key=topic_key,
-        context=resolved.context,
-        context_source=resolved.context_source,
-    )
-    if resolved.context is None or resolved.context.project is None:
-        await reply(text="no project context available for file download.")
-        return
-    try:
-        run_root = cfg.runtime.resolve_run_cwd(resolved.context)
-    except ConfigError as exc:
-        await reply(text=f"error:\n{exc}")
-        return
-    if run_root is None:
-        await reply(text="no project context available for file download.")
-        return
-    path_value = resolved.prompt
-    if not path_value.strip():
-        await reply(text=FILE_GET_USAGE)
-        return
-    rel_path = normalize_relative_path(path_value)
-    if rel_path is None:
-        await reply(text="invalid download path.")
-        return
-    deny_rule = deny_reason(rel_path, cfg.files.deny_globs)
-    if deny_rule is not None:
-        await reply(text=f"path denied by rule: {deny_rule}")
-        return
-    target = resolve_path_within_root(run_root, rel_path)
-    if target is None:
-        await reply(text="download path escapes the repo root.")
-        return
-    if not target.exists():
-        await reply(text="file does not exist.")
-        return
-    if target.is_dir():
-        try:
-            payload = zip_directory(
-                run_root,
-                rel_path,
-                cfg.files.deny_globs,
-                max_bytes=cfg.files.max_download_bytes,
-            )
-        except ZipTooLargeError:
-            await reply(text="file is too large to send.")
-            return
-        except OSError as exc:
-            await reply(text=f"failed to read directory: {exc}")
-            return
-        filename = f"{rel_path.name or 'archive'}.zip"
-    else:
-        try:
-            size = target.stat().st_size
-            if size > cfg.files.max_download_bytes:
-                await reply(text="file is too large to send.")
-                return
-            payload = target.read_bytes()
-        except OSError as exc:
-            await reply(text=f"failed to read file: {exc}")
-            return
-        filename = target.name
-    if len(payload) > cfg.files.max_download_bytes:
-        await reply(text="file is too large to send.")
-        return
-    sent = await cfg.bot.send_document(
-        chat_id=msg.chat_id,
-        filename=filename,
-        content=payload,
-        reply_to_message_id=msg.message_id,
-        message_thread_id=msg.thread_id,
-    )
-    if sent is None:
-        await reply(text="failed to send file.")
-        return

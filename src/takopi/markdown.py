@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import textwrap
 from dataclasses import dataclass
@@ -11,11 +12,42 @@ from .transport import RenderedMessage
 from .utils.paths import relativize_path
 
 STATUS = {"running": "▸", "update": "↻", "done": "✓", "fail": "✗"}
+STATUS_EMOJI = {
+    "starting": "😮",
+    "working": "🤖",
+    "queued": "😴",
+    "done": "💪",
+    "error": "🤬",
+    "cancelled": "🛑",
+}
+DEFAULT_STATUS_EMOJI = "ℹ️"
 HEADER_SEP = " · "
 HARD_BREAK = "  \n"
 
 MAX_PROGRESS_CMD_LEN = 300
 MAX_FILE_CHANGES_INLINE = 3
+COMMAND_LOG_LINES = (
+    "aligning circuits",
+    "charging photons",
+    "tuning antennas",
+    "calibrating flux",
+    "warming the cores",
+    "dusting gears",
+    "untangling wires",
+    "rolling updates",
+    "tightening bolts",
+    "counting electrons",
+    "polishing lenses",
+    "booting widgets",
+    "shuffling bytes",
+    "checking relays",
+    "sorting atoms",
+    "spinning disks",
+    "juggling threads",
+    "patching rivets",
+    "cooking kernels",
+    "routing signals",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,14 +79,56 @@ def format_elapsed(elapsed_s: float) -> str:
 
 
 def format_header(
-    elapsed_s: float, item: int | None, *, label: str, engine: str
+    elapsed_s: float,
+    item: int | None,
+    *,
+    emoji: str,
+    status: str,
+    scope: str,
 ) -> str:
     elapsed = format_elapsed(elapsed_s)
-    parts = [label, engine]
+    parts = [emoji, status, scope]
     parts.append(elapsed)
     if item is not None:
         parts.append(f"step {item}")
     return HEADER_SEP.join(parts)
+
+
+def _strip_wrapped_ticks(text: str) -> str:
+    stripped = text.strip()
+    if stripped.startswith("`") and stripped.endswith("`") and len(stripped) > 1:
+        return stripped[1:-1].strip()
+    return stripped
+
+
+def _status_parts(label: str) -> tuple[str, str]:
+    cleaned = _strip_wrapped_ticks(label)
+    key = cleaned.lower()
+    return STATUS_EMOJI.get(key, DEFAULT_STATUS_EMOJI), cleaned
+
+
+def _extract_scope(context_line: str | None) -> str | None:
+    if not context_line:
+        return None
+    for line in context_line.splitlines():
+        stripped = _strip_wrapped_ticks(line)
+        if not stripped.lower().startswith("ctx:"):
+            continue
+        content = stripped.split(":", 1)[1].strip()
+        if not content:
+            continue
+        tokens = content.split()
+        if not tokens:
+            continue
+        project = tokens[0]
+        branch = None
+        if len(tokens) >= 2:
+            if tokens[1] == "@" and len(tokens) >= 3:
+                branch = tokens[2]
+            elif tokens[1].startswith("@"):
+                branch = tokens[1][1:]
+        return branch or project
+    return None
 
 
 def shorten(text: str, width: int | None) -> str:
@@ -176,9 +250,16 @@ def render_event_cli(event: TakopiEvent) -> list[str]:
             action = action_event.action
             if action.kind == "turn":
                 return []
+            if action.kind == "command":
+                action = Action(
+                    id=action.id,
+                    kind=action.kind,
+                    title=_command_log_line(action),
+                    detail=action.detail,
+                )
             return [
                 format_action_line(
-                    action_event.action,
+                    action,
                     action_event.phase,
                     action_event.ok,
                     command_width=MAX_PROGRESS_CMD_LEN,
@@ -186,6 +267,13 @@ def render_event_cli(event: TakopiEvent) -> list[str]:
             ]
         case _:
             return []
+
+
+def _command_log_line(action: Action) -> str:
+    seed = action.id or action.title or "command"
+    digest = hashlib.sha256(seed.encode("utf-8")).digest()
+    idx = int.from_bytes(digest[:4], "big") % len(COMMAND_LOG_LINES)
+    return COMMAND_LOG_LINES[idx]
 
 
 class MarkdownFormatter:
@@ -206,11 +294,14 @@ class MarkdownFormatter:
         label: str = "working",
     ) -> MarkdownParts:
         step = state.action_count or None
+        emoji, status = _status_parts(label)
+        scope = _extract_scope(state.context_line) or state.engine
         header = format_header(
             elapsed_s,
             step,
-            label=label,
-            engine=state.engine,
+            emoji=emoji,
+            status=status,
+            scope=scope,
         )
         body = self._assemble_body(self._format_actions(state))
         return MarkdownParts(
@@ -226,11 +317,14 @@ class MarkdownFormatter:
         answer: str,
     ) -> MarkdownParts:
         step = state.action_count or None
+        emoji, status_label = _status_parts(status)
+        scope = _extract_scope(state.context_line) or state.engine
         header = format_header(
             elapsed_s,
             step,
-            label=status,
-            engine=state.engine,
+            emoji=emoji,
+            status=status_label,
+            scope=scope,
         )
         answer = (answer or "").strip()
         body = answer if answer else None

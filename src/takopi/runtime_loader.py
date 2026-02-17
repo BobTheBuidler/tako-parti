@@ -8,6 +8,7 @@ from collections.abc import Iterable, Mapping
 
 from .backends import EngineBackend
 from .config import ConfigError, ProjectsConfig
+from .engine_aliases import INTERNAL_ENGINE_ID, PUBLIC_ENGINE_ID
 from .engines import get_backend, list_backend_ids
 from .ids import RESERVED_CHAT_COMMANDS
 from .logging import get_logger
@@ -63,7 +64,15 @@ def resolve_default_engine(
     config_path: Path,
     engine_ids: list[str],
 ) -> str:
-    default_engine = override or settings.default_engine or "codex"
+    default_engine = override or settings.default_engine or INTERNAL_ENGINE_ID
+    if default_engine.lower() == PUBLIC_ENGINE_ID:
+        logger.warning(
+            "config.engine_alias",
+            label="default_engine",
+            engine=default_engine,
+            mapped=INTERNAL_ENGINE_ID,
+        )
+        default_engine = INTERNAL_ENGINE_ID
     if default_engine not in engine_ids:
         available = ", ".join(sorted(engine_ids))
         raise ConfigError(
@@ -176,6 +185,12 @@ def build_runtime_spec(
 ) -> RuntimeSpec:
     allowlist = resolve_plugins_allowlist(settings)
     engine_ids = list_backend_ids(allowlist=allowlist)
+    if INTERNAL_ENGINE_ID not in engine_ids:
+        available = ", ".join(sorted(engine_ids))
+        raise ConfigError(
+            f"Required engine {INTERNAL_ENGINE_ID!r} is missing. Available: {available}."
+        )
+    engine_ids = [INTERNAL_ENGINE_ID]
     projects = settings.to_projects_config(
         config_path=config_path,
         engine_ids=engine_ids,

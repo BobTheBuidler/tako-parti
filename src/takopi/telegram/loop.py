@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -29,18 +30,18 @@ from .commands.cancel import handle_callback_cancel, handle_cancel
 from .commands.file_transfer import FILE_PUT_USAGE
 from .commands.handlers import (
     dispatch_command,
-    handle_agent_command,
+    handle_allrepos_command,
     handle_chat_ctx_command,
     handle_chat_new_command,
     handle_ctx_command,
     handle_file_command,
     handle_file_put_default,
     handle_media_group,
-    handle_model_command,
     handle_new_command,
-    handle_reasoning_command,
+    handle_pause_command,
+    handle_resume_command,
+    handle_swarm_command,
     handle_topic_command,
-    handle_trigger_command,
     parse_slash_command,
     get_reserved_commands,
     run_engine,
@@ -51,6 +52,7 @@ from .commands.handlers import (
 from .commands.parse import is_cancel_command
 from .commands.reply import make_reply
 from .context import _merge_topic_context, _usage_ctx_set, _usage_topic
+from .quote import apply_quote_to_prompt
 from .topics import (
     _maybe_rename_topic,
     _resolve_topics_scope,
@@ -62,11 +64,9 @@ from .topics import (
 from .client import poll_incoming
 from .chat_prefs import ChatPrefsStore, resolve_prefs_path
 from .chat_sessions import ChatSessionStore, resolve_sessions_path
-from .engine_overrides import merge_overrides
 from .engine_defaults import resolve_engine_for_message
 from .topic_state import TopicStateStore, resolve_state_path
 from .trigger_mode import resolve_trigger_mode, should_trigger_run
-from .quote import apply_quote_to_prompt
 from .types import (
     TelegramCallbackQuery,
     TelegramIncomingMessage,
@@ -105,18 +105,8 @@ async def _resolve_engine_run_options(
     chat_prefs: ChatPrefsStore | None,
     topic_store: TopicStateStore | None,
 ) -> EngineRunOptions | None:
-    topic_override = None
-    if topic_store is not None and thread_id is not None:
-        topic_override = await topic_store.get_engine_override(
-            chat_id, thread_id, engine
-        )
-    chat_override = None
-    if chat_prefs is not None:
-        chat_override = await chat_prefs.get_engine_override(chat_id, engine)
-    merged = merge_overrides(topic_override, chat_override)
-    if merged is None:
-        return None
-    return EngineRunOptions(model=merged.model, reasoning=merged.reasoning)
+    _ = chat_id, thread_id, engine, chat_prefs, topic_store
+    return None
 
 
 def _allowed_chat_ids(cfg: TelegramBridgeConfig) -> set[int]:
@@ -176,6 +166,7 @@ def _dispatch_builtin_command(
     scope_chat_ids = ctx.scope_chat_ids
     reply = ctx.reply
     task_group = ctx.task_group
+    running_tasks = ctx.running_tasks
     if command_id == "file":
         if not cfg.files.enabled:
             handler = partial(
@@ -241,71 +232,53 @@ def _dispatch_builtin_command(
                 resolved_scope=resolved_scope,
                 scope_chat_ids=scope_chat_ids,
             )
+        elif command_id == "pause":
+            handler = partial(
+                handle_pause_command,
+                cfg,
+                msg,
+                topic_store,
+                resolved_scope=resolved_scope,
+                scope_chat_ids=scope_chat_ids,
+            )
+        elif command_id == "resume":
+            handler = partial(
+                handle_resume_command,
+                cfg,
+                msg,
+                topic_store,
+                resolved_scope=resolved_scope,
+                scope_chat_ids=scope_chat_ids,
+            )
+        elif command_id == "swarm":
+            handler = partial(
+                handle_swarm_command,
+                cfg,
+                msg,
+                args_text,
+                topic_store,
+                ambient_context=ambient_context,
+                resolved_scope=resolved_scope,
+                scope_chat_ids=scope_chat_ids,
+            )
+        elif command_id == "allrepos":
+            handler = partial(
+                handle_allrepos_command,
+                cfg,
+                msg,
+                args_text,
+                topic_store,
+                chat_prefs,
+                running_tasks,
+                task_group,
+                resolved_scope=resolved_scope,
+                scope_chat_ids=scope_chat_ids,
+            )
         else:
             handler = None
         if handler is not None:
             task_group.start_soon(handler)
             return True
-
-    if command_id == "model":
-        handler = partial(
-            handle_model_command,
-            cfg,
-            msg,
-            args_text,
-            ambient_context,
-            topic_store,
-            chat_prefs,
-            resolved_scope=resolved_scope,
-            scope_chat_ids=scope_chat_ids,
-        )
-        task_group.start_soon(handler)
-        return True
-
-    if command_id == "agent":
-        handler = partial(
-            handle_agent_command,
-            cfg,
-            msg,
-            args_text,
-            ambient_context,
-            topic_store,
-            chat_prefs,
-            resolved_scope=resolved_scope,
-            scope_chat_ids=scope_chat_ids,
-        )
-        task_group.start_soon(handler)
-        return True
-
-    if command_id == "reasoning":
-        handler = partial(
-            handle_reasoning_command,
-            cfg,
-            msg,
-            args_text,
-            ambient_context,
-            topic_store,
-            chat_prefs,
-            resolved_scope=resolved_scope,
-            scope_chat_ids=scope_chat_ids,
-        )
-        task_group.start_soon(handler)
-        return True
-
-    if command_id == "trigger":
-        handler = partial(
-            handle_trigger_command,
-            cfg,
-            msg,
-            args_text,
-            ambient_context,
-            topic_store,
-            chat_prefs,
-            resolved_scope=resolved_scope,
-            scope_chat_ids=scope_chat_ids,
-        )
-        task_group.start_soon(handler)
-        return True
 
     return False
 
@@ -365,7 +338,7 @@ class _PendingPrompt:
     reply_ref: MessageRef | None
     reply_id: int | None
     is_voice_transcribed: bool
-    forwards: list[tuple[int, str]]
+    forwards: list[TelegramIncomingMessage]
     cancel_scope: anyio.CancelScope | None = None
 
 
@@ -383,16 +356,6 @@ class TelegramMsgContext:
 
 
 @dataclass(frozen=True, slots=True)
-class MessageClassification:
-    text: str
-    command_id: str | None
-    args_text: str
-    is_cancel: bool
-    is_forward_candidate: bool
-    is_media_group_document: bool
-
-
-@dataclass(frozen=True, slots=True)
 class TelegramCommandContext:
     cfg: TelegramBridgeConfig
     msg: TelegramIncomingMessage
@@ -404,30 +367,7 @@ class TelegramCommandContext:
     scope_chat_ids: frozenset[int]
     reply: Callable[..., Awaitable[None]]
     task_group: TaskGroup
-
-
-def _classify_message(
-    msg: TelegramIncomingMessage, *, files_enabled: bool
-) -> MessageClassification:
-    text = msg.text
-    command_id, args_text = parse_slash_command(text)
-    is_forward_candidate = (
-        _is_forwarded(msg.raw)
-        and msg.document is None
-        and msg.voice is None
-        and msg.media_group_id is None
-    )
-    is_media_group_document = (
-        files_enabled and msg.document is not None and msg.media_group_id is not None
-    )
-    return MessageClassification(
-        text=text,
-        command_id=command_id,
-        args_text=args_text,
-        is_cancel=is_cancel_command(text),
-        is_forward_candidate=is_forward_candidate,
-        is_media_group_document=is_media_group_document,
-    )
+    running_tasks: RunningTasks
 
 
 @dataclass(slots=True)
@@ -438,6 +378,10 @@ class TelegramLoopState:
     command_ids: set[str]
     reserved_commands: set[str]
     reserved_chat_commands: set[str]
+    seen_update_ids: set[int]
+    seen_update_order: deque[int]
+    seen_message_keys: set[MessageKey]
+    seen_messages_order: deque[MessageKey]
     transport_snapshot: dict[str, object] | None
     topic_store: TopicStateStore | None
     chat_session_store: ChatSessionStore | None
@@ -448,10 +392,6 @@ class TelegramLoopState:
     forward_coalesce_s: float
     media_group_debounce_s: float
     transport_id: str | None
-    seen_update_ids: set[int]
-    seen_update_order: deque[int]
-    seen_message_keys: set[MessageKey]
-    seen_messages_order: deque[MessageKey]
 
 
 if TYPE_CHECKING:
@@ -484,6 +424,40 @@ def _forward_fields_present(raw: dict[str, object] | None) -> list[str]:
     if not isinstance(raw, dict):
         return []
     return [field for field in _FORWARD_FIELDS if raw.get(field) is not None]
+
+
+def _format_timestamp(date: int | None) -> str:
+    if date is None:
+        return "time=?"
+    return datetime.fromtimestamp(date, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _format_sender(msg: TelegramIncomingMessage) -> str:
+    parts = [part for part in (msg.sender_first_name, msg.sender_last_name) if part]
+    if parts:
+        return " ".join(parts)
+    if msg.sender_username:
+        return f"@{msg.sender_username}"
+    if msg.sender_id is not None:
+        return f"user:{msg.sender_id}"
+    return "unknown"
+
+
+def _format_prompt_header(msg: TelegramIncomingMessage) -> str:
+    if msg.thread_id is None:
+        return ""
+    timestamp = _format_timestamp(msg.date)
+    sender = _format_sender(msg)
+    return f"[{timestamp}] {sender}:"
+
+
+def _format_prompt_line(msg: TelegramIncomingMessage, text: str) -> str:
+    header = _format_prompt_header(msg)
+    if not header:
+        return text
+    if text.strip():
+        return f"{header} {text}"
+    return header
 
 
 def _format_forwarded_prompt(forwarded: list[str], prompt: str) -> str:
@@ -611,7 +585,7 @@ class ForwardCoalescer:
                 reason="empty_text",
             )
             return
-        pending.forwards.append((msg.message_id, text))
+        pending.forwards.append(msg)
         logger.debug(
             "forward.message.attached",
             chat_id=msg.chat_id,
@@ -622,7 +596,7 @@ class ForwardCoalescer:
             forward_count=len(pending.forwards),
             forward_fields=_forward_fields_present(msg.raw),
             forward_date=msg.raw.get("forward_date") if msg.raw else None,
-            message_date=msg.raw.get("date") if msg.raw else None,
+            message_date=msg.date,
             text_len=len(text),
         )
         self._reschedule(key, pending)
@@ -979,6 +953,10 @@ async def run_main_loop(
         },
         reserved_commands=get_reserved_commands(cfg.runtime),
         reserved_chat_commands=set(RESERVED_CHAT_COMMANDS),
+        seen_update_ids=set(),
+        seen_update_order=deque(),
+        seen_message_keys=set(),
+        seen_messages_order=deque(),
         transport_snapshot=(
             transport_config.model_dump() if transport_config is not None else None
         ),
@@ -991,10 +969,6 @@ async def run_main_loop(
         forward_coalesce_s=max(0.0, float(cfg.forward_coalesce_s)),
         media_group_debounce_s=max(0.0, float(cfg.media_group_debounce_s)),
         transport_id=transport_id,
-        seen_update_ids=set(),
-        seen_update_order=deque(),
-        seen_message_keys=set(),
-        seen_messages_order=deque(),
     )
 
     def refresh_topics_scope() -> None:
@@ -1352,6 +1326,7 @@ async def run_main_loop(
                 chat_session_key: tuple[int, int | None] | None,
                 reply_ref: MessageRef | None,
                 reply_id: int | None,
+                spawn_run_job: bool,
             ) -> None:
                 chat_id = msg.chat_id
                 user_msg_id = msg.message_id
@@ -1378,18 +1353,33 @@ async def run_main_loop(
                     return
                 resume_token = resume_decision.resume_token
                 if resume_token is None:
-                    await run_job(
-                        chat_id,
-                        user_msg_id,
-                        prompt_text,
-                        None,
-                        context,
-                        msg.thread_id,
-                        chat_session_key,
-                        reply_ref,
-                        scheduler.note_thread_known,
-                        engine_override,
-                    )
+                    if spawn_run_job:
+                        tg.start_soon(
+                            run_job,
+                            chat_id,
+                            user_msg_id,
+                            prompt_text,
+                            None,
+                            context,
+                            msg.thread_id,
+                            chat_session_key,
+                            reply_ref,
+                            scheduler.note_thread_known,
+                            engine_override,
+                        )
+                    else:
+                        await run_job(
+                            chat_id,
+                            user_msg_id,
+                            prompt_text,
+                            None,
+                            context,
+                            msg.thread_id,
+                            chat_session_key,
+                            reply_ref,
+                            scheduler.note_thread_known,
+                            engine_override,
+                        )
                     return
                 progress_ref = await _send_queued_progress(
                     cfg,
@@ -1425,6 +1415,8 @@ async def run_main_loop(
                     if msg.reply_to_message_id is not None
                     else None
                 )
+                prompt_text = _format_prompt_line(msg, prompt_text)
+                prompt_text = apply_quote_to_prompt(msg, prompt_text)
                 chat_session_key = _chat_session_key(
                     msg, store=state.chat_session_store
                 )
@@ -1437,6 +1429,7 @@ async def run_main_loop(
                     chat_session_key=chat_session_key,
                     reply_ref=reply_ref,
                     reply_id=reply_id,
+                    spawn_run_job=False,
                 )
 
             async def _dispatch_pending_prompt(pending: _PendingPrompt) -> None:
@@ -1461,13 +1454,19 @@ async def run_main_loop(
                         context_source=resolved.context_source,
                     )
 
-                prompt_text = resolved.prompt
+                prompt_text = apply_quote_to_prompt(
+                    msg,
+                    _format_prompt_line(msg, resolved.prompt),
+                )
                 if pending.forwards:
                     forwarded = [
-                        text
-                        for _, text in sorted(
+                        apply_quote_to_prompt(
+                            item,
+                            _format_prompt_line(item, item.text),
+                        )
+                        for item in sorted(
                             pending.forwards,
-                            key=lambda item: item[0],
+                            key=lambda item: item.message_id,
                         )
                     ]
                     prompt_text = _format_forwarded_prompt(
@@ -1492,6 +1491,7 @@ async def run_main_loop(
                     chat_session_key=pending.chat_session_key,
                     reply_ref=pending.reply_ref,
                     reply_id=pending.reply_id,
+                    spawn_run_job=True,
                 )
 
             forward_coalescer = ForwardCoalescer(
@@ -1594,14 +1594,35 @@ async def run_main_loop(
 
             async def route_message(msg: TelegramIncomingMessage) -> None:
                 reply = make_reply(cfg, msg)
-                classification = _classify_message(msg, files_enabled=cfg.files.enabled)
-                text = classification.text
+                text = msg.text
+                if (
+                    cfg.topics.enabled
+                    and cfg.topics.ignore_root
+                    and msg.thread_id is None
+                    and msg.is_forum is True
+                    and _topics_chat_allowed(
+                        cfg, msg.chat_id, scope_chat_ids=state.topics_chat_ids
+                    )
+                ):
+                    command_id, _ = parse_slash_command(text)
+                    if command_id is None:
+                        return
                 is_voice_transcribed = False
-                if classification.is_forward_candidate:
+                is_forward_candidate = (
+                    _is_forwarded(msg.raw)
+                    and msg.document is None
+                    and msg.voice is None
+                    and msg.media_group_id is None
+                )
+                if is_forward_candidate:
                     forward_coalescer.attach_forward(msg)
                     return
                 forward_key = _forward_key(msg)
-                if classification.is_media_group_document:
+                if (
+                    cfg.files.enabled
+                    and msg.document is not None
+                    and msg.media_group_id is not None
+                ):
                     media_group_buffer.add(msg)
                     return
                 ctx = await build_message_context(msg)
@@ -1614,14 +1635,13 @@ async def run_main_loop(
                 chat_project = ctx.chat_project
                 ambient_context = ctx.ambient_context
 
-                if classification.is_cancel:
+                if is_cancel_command(text):
                     tg.start_soon(
                         handle_cancel, cfg, msg, state.running_tasks, scheduler
                     )
                     return
 
-                command_id = classification.command_id
-                args_text = classification.args_text
+                command_id, args_text = parse_slash_command(text)
                 if command_id == "new":
                     forward_coalescer.cancel(forward_key)
                     if state.topic_store is not None and topic_key is not None:
@@ -1669,8 +1689,16 @@ async def run_main_loop(
                         scope_chat_ids=state.topics_chat_ids,
                         reply=reply,
                         task_group=tg,
+                        running_tasks=state.running_tasks,
                     ),
                     command_id=command_id,
+                ):
+                    return
+
+                if (
+                    state.topic_store is not None
+                    and topic_key is not None
+                    and await state.topic_store.get_paused(*topic_key)
                 ):
                     return
 
@@ -1834,7 +1862,7 @@ async def run_main_loop(
                         oldest_update_id = state.seen_update_order.popleft()
                         state.seen_update_ids.discard(oldest_update_id)
                 elif isinstance(update, TelegramIncomingMessage):
-                    key = (update.chat_id, update.message_id)
+                    key: MessageKey = (update.chat_id, update.message_id)
                     if key in state.seen_message_keys:
                         logger.debug(
                             "update.ignored",

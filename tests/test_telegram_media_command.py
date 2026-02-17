@@ -52,7 +52,6 @@ async def test_media_group_file_command_reports_usage() -> None:
     assert transport.send_calls
     text = transport.send_calls[-1]["message"].text
     assert "usage: /file put <path>" in text
-    assert "or /file get <path>" in text
 
 
 @pytest.mark.anyio

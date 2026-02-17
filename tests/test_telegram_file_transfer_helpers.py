@@ -560,16 +560,12 @@ async def test_handle_file_command_routes(monkeypatch) -> None:
     transport = FakeTransport()
     cfg = make_cfg(transport)
     msg = _msg("/file")
-    calls: dict[str, int] = {"put": 0, "get": 0}
+    calls: dict[str, int] = {"put": 0}
 
     async def _fake_put(*_args, **_kwargs) -> None:
         calls["put"] += 1
 
-    async def _fake_get(*_args, **_kwargs) -> None:
-        calls["get"] += 1
-
     monkeypatch.setattr(transfer, "_handle_file_put", _fake_put)
-    monkeypatch.setattr(transfer, "_handle_file_get", _fake_get)
 
     await transfer._handle_file_command(
         cfg,
@@ -578,16 +574,8 @@ async def test_handle_file_command_routes(monkeypatch) -> None:
         ambient_context=None,
         topic_store=None,
     )
-    await transfer._handle_file_command(
-        cfg,
-        msg,
-        "get downloads/report.txt",
-        ambient_context=None,
-        topic_store=None,
-    )
 
     assert calls["put"] == 1
-    assert calls["get"] == 1
 
 
 @pytest.mark.anyio
@@ -599,7 +587,7 @@ async def test_handle_file_command_invalid_usage() -> None:
     await transfer._handle_file_command(
         cfg,
         msg,
-        "unknown arg",
+        "get downloads/report.txt",
         ambient_context=None,
         topic_store=None,
     )
@@ -654,107 +642,6 @@ async def test_handle_file_put_group_formats_failures(
     text = transport.send_calls[-1]["message"].text
     assert "saved a.txt to uploads/" in text
     assert "failed:" in text
-
-
-@pytest.mark.anyio
-async def test_handle_file_get_requires_path(tmp_path: Path) -> None:
-    transport = FakeTransport()
-    cfg = replace(make_cfg(transport), runtime=_runtime(tmp_path))
-    msg = _msg("/file get")
-
-    await transfer._handle_file_get(
-        cfg,
-        msg,
-        "",
-        ambient_context=None,
-        topic_store=None,
-    )
-
-    assert transport.send_calls
-    assert "usage: /file get <path>" in transport.send_calls[-1]["message"].text
-
-
-@pytest.mark.anyio
-async def test_handle_file_get_invalid_path(tmp_path: Path) -> None:
-    transport = FakeTransport()
-    cfg = replace(make_cfg(transport), runtime=_runtime(tmp_path))
-    msg = _msg("/file get")
-
-    await transfer._handle_file_get(
-        cfg,
-        msg,
-        "../secret.txt",
-        ambient_context=None,
-        topic_store=None,
-    )
-
-    assert transport.send_calls
-    assert "invalid download path" in transport.send_calls[-1]["message"].text
-
-
-@pytest.mark.anyio
-async def test_handle_file_get_missing_file(tmp_path: Path) -> None:
-    transport = FakeTransport()
-    cfg = replace(make_cfg(transport), runtime=_runtime(tmp_path))
-    msg = _msg("/file get")
-
-    await transfer._handle_file_get(
-        cfg,
-        msg,
-        "missing.txt",
-        ambient_context=None,
-        topic_store=None,
-    )
-
-    assert transport.send_calls
-    assert "file does not exist" in transport.send_calls[-1]["message"].text
-
-
-@pytest.mark.anyio
-async def test_handle_file_get_sends_file(tmp_path: Path) -> None:
-    transport = FakeTransport()
-    bot = FakeBot()
-    cfg = replace(make_cfg(transport), runtime=_runtime(tmp_path), bot=bot)
-    target = tmp_path / "notes.txt"
-    target.write_bytes(b"hello")
-    msg = _msg("/file get")
-
-    await transfer._handle_file_get(
-        cfg,
-        msg,
-        "notes.txt",
-        ambient_context=None,
-        topic_store=None,
-    )
-
-    assert bot.document_calls
-    call = bot.document_calls[-1]
-    assert call["filename"] == "notes.txt"
-    assert call["content"] == b"hello"
-
-
-@pytest.mark.anyio
-async def test_handle_file_get_sends_directory_zip(tmp_path: Path) -> None:
-    transport = FakeTransport()
-    bot = FakeBot()
-    cfg = replace(make_cfg(transport), runtime=_runtime(tmp_path), bot=bot)
-    bundle = tmp_path / "bundle"
-    bundle.mkdir()
-    (bundle / "file.txt").write_text("data", encoding="utf-8")
-    msg = _msg("/file get")
-
-    await transfer._handle_file_get(
-        cfg,
-        msg,
-        "bundle",
-        ambient_context=None,
-        topic_store=None,
-    )
-
-    assert bot.document_calls
-    call = bot.document_calls[-1]
-    assert call["filename"] == "bundle.zip"
-    assert call["content"][:2] == b"PK"
 
 
 @pytest.mark.anyio
@@ -944,51 +831,6 @@ async def test_handle_file_put_group_infers_dir(tmp_path: Path, monkeypatch) -> 
 
 
 @pytest.mark.anyio
-async def test_handle_file_get_permission_denied(tmp_path: Path) -> None:
-    transport = FakeTransport()
-    files = TelegramFilesSettings(allowed_user_ids=[42])
-    cfg = replace(make_cfg(transport), runtime=_runtime(tmp_path), files=files)
-    msg = _msg("/file get", sender_id=1)
-
-    await transfer._handle_file_get(
-        cfg,
-        msg,
-        "notes.txt",
-        ambient_context=None,
-        topic_store=None,
-    )
-
-    assert transport.send_calls
-    assert "file transfer is not allowed" in transport.send_calls[-1]["message"].text
-
-
-@pytest.mark.anyio
-async def test_handle_file_get_send_failure(tmp_path: Path) -> None:
-    class _NoSendBot(FakeBot):
-        async def send_document(self, *args, **kwargs):
-            _ = args
-            _ = kwargs
-            return None
-
-    transport = FakeTransport()
-    cfg = replace(make_cfg(transport), runtime=_runtime(tmp_path), bot=_NoSendBot())
-    target = tmp_path / "notes.txt"
-    target.write_text("data", encoding="utf-8")
-    msg = _msg("/file get")
-
-    await transfer._handle_file_get(
-        cfg,
-        msg,
-        "notes.txt",
-        ambient_context=None,
-        topic_store=None,
-    )
-
-    assert transport.send_calls
-    assert "failed to send file" in transport.send_calls[-1]["message"].text
-
-
-@pytest.mark.anyio
 async def test_save_file_put_reports_invalid_path(tmp_path: Path) -> None:
     transport = FakeTransport()
     cfg = replace(
@@ -1061,113 +903,3 @@ async def test_save_file_put_reports_missing_path(tmp_path: Path, monkeypatch) -
     assert result is None
     assert transport.send_calls
     assert "failed to save file" in transport.send_calls[-1]["message"].text
-
-
-@pytest.mark.anyio
-async def test_handle_file_get_requires_context(tmp_path: Path) -> None:
-    transport = FakeTransport()
-    cfg = make_cfg(transport)
-    msg = _msg("/file get")
-
-    await transfer._handle_file_get(
-        cfg,
-        msg,
-        "note.txt",
-        ambient_context=None,
-        topic_store=None,
-    )
-
-    assert transport.send_calls
-    assert (
-        "no project context available for file download"
-        in transport.send_calls[-1]["message"].text
-    )
-
-
-@pytest.mark.anyio
-async def test_handle_file_get_denies_path(tmp_path: Path) -> None:
-    transport = FakeTransport()
-    cfg = replace(make_cfg(transport), runtime=_runtime(tmp_path))
-    msg = _msg("/file get")
-
-    await transfer._handle_file_get(
-        cfg,
-        msg,
-        ".env",
-        ambient_context=None,
-        topic_store=None,
-    )
-
-    assert transport.send_calls
-    assert "path denied by rule: .env" in transport.send_calls[-1]["message"].text
-
-
-@pytest.mark.anyio
-async def test_handle_file_get_escape_root(tmp_path: Path, monkeypatch) -> None:
-    transport = FakeTransport()
-    cfg = replace(make_cfg(transport), runtime=_runtime(tmp_path))
-    msg = _msg("/file get")
-
-    monkeypatch.setattr(transfer, "resolve_path_within_root", lambda *_a, **_k: None)
-
-    await transfer._handle_file_get(
-        cfg,
-        msg,
-        "note.txt",
-        ambient_context=None,
-        topic_store=None,
-    )
-
-    assert transport.send_calls
-    assert (
-        "download path escapes the repo root"
-        in transport.send_calls[-1]["message"].text
-    )
-
-
-@pytest.mark.anyio
-async def test_handle_file_get_zip_too_large(tmp_path: Path, monkeypatch) -> None:
-    transport = FakeTransport()
-    cfg = replace(make_cfg(transport), runtime=_runtime(tmp_path))
-    bundle = tmp_path / "bundle"
-    bundle.mkdir()
-    (bundle / "file.txt").write_text("data", encoding="utf-8")
-    msg = _msg("/file get")
-
-    def _raise(*_args, **_kwargs):
-        raise transfer.ZipTooLargeError()
-
-    monkeypatch.setattr(transfer, "zip_directory", _raise)
-
-    await transfer._handle_file_get(
-        cfg,
-        msg,
-        "bundle",
-        ambient_context=None,
-        topic_store=None,
-    )
-
-    assert transport.send_calls
-    assert "file is too large to send" in transport.send_calls[-1]["message"].text
-
-
-@pytest.mark.anyio
-async def test_handle_file_get_file_too_large(tmp_path: Path, monkeypatch) -> None:
-    transport = FakeTransport()
-    cfg = replace(make_cfg(transport), runtime=_runtime(tmp_path))
-    target = tmp_path / "notes.txt"
-    target.write_bytes(b"data")
-    msg = _msg("/file get")
-
-    monkeypatch.setattr(TelegramFilesSettings, "max_download_bytes", 1)
-
-    await transfer._handle_file_get(
-        cfg,
-        msg,
-        "notes.txt",
-        ambient_context=None,
-        topic_store=None,
-    )
-
-    assert transport.send_calls
-    assert "file is too large to send" in transport.send_calls[-1]["message"].text

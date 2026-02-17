@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from .config import ConfigError, ProjectsConfig
+from .config import ConfigError, ProjectConfig, ProjectsConfig
 from .context import RunContext
 from .directives import (
     ParsedDirectives,
@@ -13,6 +13,7 @@ from .directives import (
     parse_context_line,
     parse_directives,
 )
+from .engine_aliases import ENGINE_DIRECTIVE_IDS, resolve_engine_directive
 from .model import EngineId, ResumeToken
 from .plugins import normalize_allowlist
 from .router import AutoRouter, EngineStatus
@@ -147,6 +148,9 @@ class TransportRuntime:
     def project_aliases(self) -> tuple[str, ...]:
         return tuple(project.alias for project in self._projects.projects.values())
 
+    def project_config(self, key: str) -> ProjectConfig | None:
+        return self._projects.projects.get(key)
+
     @property
     def allowlist(self) -> set[str] | None:
         return self._allowlist
@@ -182,7 +186,7 @@ class TransportRuntime:
     ) -> ResolvedMessage:
         directives = parse_directives(
             text,
-            engine_ids=self._router.engine_ids,
+            engine_ids=ENGINE_DIRECTIVE_IDS,
             projects=self._projects,
         )
         reply_ctx = parse_context_line(reply_text, projects=self._projects)
@@ -197,7 +201,7 @@ class TransportRuntime:
             default_project=default_project,
         )
         engine_override = self._resolve_engine_override(
-            directives_engine=directives.engine,
+            directives_engine=resolve_engine_directive(directives.engine),
         )
 
         return ResolvedMessage(

@@ -1,6 +1,6 @@
 # File transfer
 
-Upload files into the active repo/worktree or fetch files back into Telegram.
+Upload files into the active repo/worktree.
 
 ## Enable file transfer
 
@@ -54,16 +54,6 @@ Use `--force` to overwrite:
 ```
 /file put --force docs/spec.pdf
 ```
-
-## Fetch a file (`/file get`)
-
-Send:
-
-```
-/file get <path>
-```
-
-Directories are zipped automatically.
 
 ## Related
 

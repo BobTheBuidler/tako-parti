@@ -137,12 +137,12 @@ Takopi shows three workflow previews:
 
     <div class="workflow-preview">
     <div class="msg msg-you">make happy wings fit</div><div class="clearfix"></div>
-    <div class="msg msg-bot">done · codex · 8s · step 3</div><div class="clearfix"></div>
+    <div class="msg msg-bot">💪 · done · codex · 8s · step 3</div><div class="clearfix"></div>
     <div class="msg msg-you">carry heavy creatures</div><div class="clearfix"></div>
-    <div class="msg msg-bot">done · codex · 12s · step 5</div><div class="clearfix"></div>
+    <div class="msg msg-bot">💪 · done · codex · 12s · step 5</div><div class="clearfix"></div>
     <div class="msg msg-you"><span class="cmd">/new</span></div><div class="clearfix"></div>
     <div class="msg msg-you">add flower pin</div><div class="clearfix"></div>
-    <div class="msg msg-bot">done · codex · 6s · step 2</div><div class="clearfix"></div>
+    <div class="msg msg-bot">💪 · done · codex · 6s · step 2</div><div class="clearfix"></div>
     </div>
 
 === "workspace"
@@ -152,9 +152,9 @@ Takopi shows three workflow previews:
     <div class="workflow-preview">
     <div class="topic-bar"><span class="topic-active">happian @memory-box</span><span class="topic">takopi @master</span></div>
     <div class="msg msg-you">store artifacts forever</div><div class="clearfix"></div>
-    <div class="msg msg-bot">done · codex · 10s · step 4</div><div class="clearfix"></div>
+    <div class="msg msg-bot">💪 · done · codex · 10s · step 4</div><div class="clearfix"></div>
     <div class="msg msg-you">also freeze them</div><div class="clearfix"></div>
-    <div class="msg msg-bot">done · codex · 6s · step 2</div><div class="clearfix"></div>
+    <div class="msg msg-bot">💪 · done · codex · 6s · step 2</div><div class="clearfix"></div>
     </div>
 
 === "handoff"
@@ -163,11 +163,11 @@ Takopi shows three workflow previews:
 
     <div class="workflow-preview">
     <div class="msg msg-you">make it go back in time</div><div class="clearfix"></div>
-    <div class="msg msg-bot">done · codex · 8s · step 3<br><span class="resume">codex resume <span class="id-1">abc123</span></span></div><div class="clearfix"></div>
+    <div class="msg msg-bot">💪 · done · codex · 8s · step 3<br><span class="resume">codex resume <span class="id-1">abc123</span></span></div><div class="clearfix"></div>
     <div class="msg msg-you">add reconciliation ribbon</div><div class="clearfix"></div>
-    <div class="msg msg-bot">done · codex · 3s · step 1<br><span class="resume">codex resume <span class="id-2">def456</span></span></div><div class="clearfix"></div>
-    <div class="msg msg-you"><div class="reply-quote">done · codex · 8s · step 3</div>more than once</div><div class="clearfix"></div>
-    <div class="msg msg-bot">done · codex · 8s · step 5<br><span class="resume">codex resume <span class="id-1">abc123</span></span></div><div class="clearfix"></div>
+    <div class="msg msg-bot">💪 · done · codex · 3s · step 1<br><span class="resume">codex resume <span class="id-2">def456</span></span></div><div class="clearfix"></div>
+    <div class="msg msg-you"><div class="reply-quote">💪 · done · codex · 8s · step 3</div>more than once</div><div class="clearfix"></div>
+    <div class="msg msg-bot">💪 · done · codex · 8s · step 5<br><span class="resume">codex resume <span class="id-1">abc123</span></span></div><div class="clearfix"></div>
     </div>
 
 ```
@@ -230,7 +230,7 @@ Takopi scans your PATH for installed agent CLIs:
 ```
 step 4: default engine
 
-takopi runs these engines on your computer. switch anytime with /agent.
+takopi runs these engines on your computer. switch anytime with `/<engine>` directives or config defaults.
 
   engine    status         install command
   ───────────────────────────────────────────

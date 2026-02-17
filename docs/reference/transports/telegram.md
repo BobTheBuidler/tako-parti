@@ -81,19 +81,16 @@ Explicit invocation includes any of:
 - `@botname` mention in the message.
 - `/<engine-id>` or `/<project-alias>` as the first token.
 - Replying to a bot message.
-- Built-in or plugin slash commands (for example `/agent`, `/model`, `/reasoning`, `/file`, `/trigger`).
+- Built-in or plugin slash commands (for example `/file`, `/new`, `/ctx`, `/topic`, `/pause`, `/resume`, `/swarm`, `/allrepos`, `/cancel`).
 
 Note: In forum topics, some Telegram clients include `reply_to_message` on every
 message, pointing at the topic’s root service message (`message_id ==
 message_thread_id`). Takopi treats those as implicit topic references, not
 explicit replies, so they do not trigger mentions-only mode.
 
-Commands:
-
-- `/trigger` shows the current mode and defaults.
-- `/trigger mentions` restricts runs to explicit invocations.
-- `/trigger all` restores the default behavior.
-- `/trigger clear` clears a topic override (topics only).
+Trigger mode is stored in `telegram_chat_prefs_state.json` (chat default) and
+`telegram_topics_state.json` (topic overrides). Set `trigger_mode` to `mentions`
+or `all` in those files as needed.
 
 In group chats, changing trigger mode requires the sender to be an admin.
 
@@ -224,7 +221,7 @@ Commands:
 - `all`: use `/topic <project> @branch` in the main chat, or `/topic @branch` in
   project chats.
 - `/ctx` shows the bound context and stored session engines inside topics.
-  Outside topics, `/ctx set ...` and `/ctx clear` bind the chat context.
+  Outside topics, `/ctx set ...` binds the chat context.
 - `/new` inside a topic clears stored resume tokens for that topic.
 
 State is stored in `telegram_topics_state.json` alongside the config file.

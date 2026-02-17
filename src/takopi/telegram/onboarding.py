@@ -394,15 +394,15 @@ def render_workspace_preview() -> Text:
         ("[you] ", "bold cyan"),
         "store artifacts forever\n",
         ("[bot] ", "bold magenta"),
-        ("done · codex · 10s\n", "dim"),
+        ("💪 · done · codex · 10s\n", "dim"),
         ("[you] ", "bold cyan"),
         "also freeze them\n",
         ("[bot] ", "bold magenta"),
-        ("done · codex · 6s\n", "dim"),
+        ("💪 · done · codex · 6s\n", "dim"),
         ("[you] ", "bold cyan"),
         "automatically adjust size\n",
         ("[bot] ", "bold magenta"),
-        ("done · codex · 6s", "dim"),
+        ("💪 · done · codex · 6s", "dim"),
     )
 
 
@@ -411,22 +411,22 @@ def render_assistant_preview() -> Text:
         ("[you] ", "bold cyan"),
         "make happy wings fit\n",
         ("[bot] ", "bold magenta"),
-        ("done · codex · 8s\n", "dim"),
+        ("💪 · done · codex · 8s\n", "dim"),
         ("[you] ", "bold cyan"),
         "carry heavy creatures\n",
         ("[bot] ", "bold magenta"),
-        ("done · codex · 12s\n", "dim"),
+        ("💪 · done · codex · 12s\n", "dim"),
         ("[you] ", "bold cyan"),
         ("/new", "green"),
         ("  ← start fresh\n", "yellow"),
         ("[you] ", "bold cyan"),
         "add flower pin\n",
         ("[bot] ", "bold magenta"),
-        ("done · codex · 6s\n", "dim"),
+        ("💪 · done · codex · 6s\n", "dim"),
         ("[you] ", "bold cyan"),
         "make wearer appear as flower\n",
         ("[bot] ", "bold magenta"),
-        ("done · codex · 4s", "dim"),
+        ("💪 · done · codex · 4s", "dim"),
     )
 
 
@@ -435,21 +435,21 @@ def render_handoff_preview() -> Text:
         ("[you] ", "bold cyan"),
         "make it go back in time\n",
         ("[bot] ", "bold magenta"),
-        ("done · codex · 8s\n", "dim"),
+        ("💪 · done · codex · 8s\n", "dim"),
         ("      codex resume ", "dim"),
         ("abc123 ", "cyan"),
         ("← reply\n", "yellow"),
         ("[you] ", "bold cyan"),
         "add reconciliation ribbon\n",
         ("[bot] ", "bold magenta"),
-        ("done · codex · 3s\n", "dim"),
+        ("💪 · done · codex · 3s\n", "dim"),
         ("      codex resume ", "dim"),
         ("def456\n", "blue"),
         ("[you] ", "bold cyan"),
         ("(reply) ", "green"),
         "more than once\n",
         ("[bot] ", "bold magenta"),
-        ("done · codex · 8s\n", "dim"),
+        ("💪 · done · codex · 8s\n", "dim"),
         ("      codex resume ", "dim"),
         ("abc123", "cyan"),
     )
@@ -877,7 +877,10 @@ async def step_capture_chat(ui: UI, svc: Services, state: OnboardingState) -> No
 
 
 async def step_default_engine(ui: UI, svc: Services, state: OnboardingState) -> None:
-    ui.print("takopi runs these engines on your computer. switch anytime with /agent.")
+    ui.print(
+        "takopi runs these engines on your computer. edit ~/.takopi/takopi.toml "
+        "to change defaults."
+    )
     rows = svc.list_engines()
     render_engine_table(ui, rows)
     installed_ids = [engine_id for engine_id, installed, _ in rows if installed]

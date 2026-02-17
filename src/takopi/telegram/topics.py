@@ -28,7 +28,7 @@ __all__ = [
     "_validate_topics_setup",
 ]
 
-_TOPICS_COMMANDS = {"ctx", "new", "topic"}
+_TOPICS_COMMANDS = {"ctx", "new", "pause", "resume", "topic"}
 
 
 def _resolve_topics_scope_raw(
@@ -92,14 +92,14 @@ def _topics_command_error(
         if cfg.topics.scope == "auto":
             return (
                 "topics commands are only available in the main chat (auto scope). "
-                'to use topics in project chats, set `topics.scope = "projects"`.'
+                'to use topics in project chats, set `topics.scope = "projects"`."
             )
         return "topics commands are only available in the main chat."
     if resolved_scope == "projects":
         if cfg.topics.scope == "auto":
             return (
                 "topics commands are only available in project chats (auto scope). "
-                'to use topics in the main chat, set `topics.scope = "main"`.'
+                'to use topics in the main chat, set `topics.scope = "main"`."
             )
         return "topics commands are only available in project chats."
     return "topics commands are only available in the main or project chats."

@@ -7,9 +7,7 @@ import pytest
 
 from takopi import commands, plugins
 from takopi.telegram.commands.executor import _CaptureTransport, _run_engine
-from takopi.telegram.commands.file_transfer import _handle_file_get, _handle_file_put
-from takopi.telegram.commands.model import _handle_model_command
-from takopi.telegram.commands.reasoning import _handle_reasoning_command
+from takopi.telegram.commands.file_transfer import _handle_file_put
 from takopi.telegram.commands.topics import _handle_topic_command
 import takopi.telegram.loop as telegram_loop
 import takopi.telegram.topics as telegram_topics
@@ -35,6 +33,7 @@ from takopi.telegram.chat_prefs import ChatPrefsStore, resolve_prefs_path
 from takopi.telegram.engine_overrides import EngineOverrides
 from takopi.context import RunContext
 from takopi.config import ProjectConfig, ProjectsConfig
+from takopi.engine_aliases import ENGINE_DIRECTIVE_IDS, INTERNAL_ENGINE_ID, PUBLIC_ENGINE_ID
 from takopi.runner_bridge import ExecBridgeConfig, RunningTask
 from takopi.markdown import MarkdownPresenter
 from takopi.model import ResumeToken
@@ -50,6 +49,7 @@ from takopi.telegram.types import (
     TelegramVoice,
 )
 from takopi.transport import MessageRef, RenderedMessage, SendOptions
+from tests.factories import action_started
 from tests.plugin_fixtures import FakeEntryPoint, install_entrypoints
 from tests.telegram_fakes import (
     FakeBot,
@@ -59,7 +59,7 @@ from tests.telegram_fakes import (
     _make_router,
 )
 
-CODEX_ENGINE = "codex"
+CODEX_ENGINE = INTERNAL_ENGINE_ID
 FAST_FORWARD_COALESCE_S = 0.0
 FAST_MEDIA_GROUP_DEBOUNCE_S = 0.0
 BATCH_MEDIA_GROUP_DEBOUNCE_S = 0.05
@@ -74,52 +74,66 @@ class _NoopTaskGroup:
 
 def test_parse_directives_inline_engine() -> None:
     directives = parse_directives(
-        "/claude do it",
-        engine_ids=("codex", "claude"),
+        f"/{PUBLIC_ENGINE_ID} do it",
+        engine_ids=ENGINE_DIRECTIVE_IDS,
         projects=_empty_projects(),
     )
-    assert directives.engine == "claude"
+    assert directives.engine == PUBLIC_ENGINE_ID
     assert directives.prompt == "do it"
 
 
 def test_parse_directives_newline() -> None:
     directives = parse_directives(
-        "/codex\nhello",
-        engine_ids=("codex", "claude"),
+        f"/{PUBLIC_ENGINE_ID}\nhello",
+        engine_ids=ENGINE_DIRECTIVE_IDS,
         projects=_empty_projects(),
     )
-    assert directives.engine == "codex"
+    assert directives.engine == PUBLIC_ENGINE_ID
     assert directives.prompt == "hello"
 
 
-def test_parse_directives_ignores_unknown() -> None:
+def test_parse_directives_ignores_codex() -> None:
     directives = parse_directives(
-        "/unknown hi",
-        engine_ids=("codex", "claude"),
+        "/codex hi",
+        engine_ids=ENGINE_DIRECTIVE_IDS,
         projects=_empty_projects(),
     )
     assert directives.engine is None
-    assert directives.prompt == "/unknown hi"
+    assert directives.prompt == "/codex hi"
 
 
 def test_parse_directives_bot_suffix() -> None:
     directives = parse_directives(
-        "/claude@bunny_agent_bot hi",
-        engine_ids=("claude",),
+        f"/{PUBLIC_ENGINE_ID}@bunny_agent_bot hi",
+        engine_ids=ENGINE_DIRECTIVE_IDS,
         projects=_empty_projects(),
     )
-    assert directives.engine == "claude"
+    assert directives.engine == PUBLIC_ENGINE_ID
     assert directives.prompt == "hi"
 
 
 def test_parse_directives_only_first_non_empty_line() -> None:
     directives = parse_directives(
-        "hello\n/claude hi",
-        engine_ids=("codex", "claude"),
+        f"hello\n/{PUBLIC_ENGINE_ID} hi",
+        engine_ids=ENGINE_DIRECTIVE_IDS,
         projects=_empty_projects(),
     )
     assert directives.engine is None
-    assert directives.prompt == "hello\n/claude hi"
+    assert directives.prompt == f"hello\n/{PUBLIC_ENGINE_ID} hi"
+
+
+def test_resolve_message_maps_robob_to_codex() -> None:
+    runner = ScriptRunner(
+        [Return(answer="ok")], engine=CODEX_ENGINE, resume_value="sid"
+    )
+    runtime = TransportRuntime(
+        router=_make_router(runner),
+        projects=_empty_projects(),
+    )
+    resolved = runtime.resolve_message(text=f"/{PUBLIC_ENGINE_ID} do it", reply_text=None)
+
+    assert resolved.engine_override == INTERNAL_ENGINE_ID
+    assert resolved.prompt == "do it"
 
 
 def test_build_bot_commands_includes_cancel_and_engine() -> None:
@@ -133,11 +147,14 @@ def test_build_bot_commands_includes_cancel_and_engine() -> None:
     commands = build_bot_commands(runtime)
 
     assert {"command": "cancel", "description": "cancel run"} in commands
-    assert {"command": "file", "description": "upload or fetch files"} in commands
+    assert {"command": "file", "description": "upload files"} in commands
     assert {"command": "new", "description": "start a new thread"} in commands
     assert {"command": "ctx", "description": "show or update context"} in commands
-    assert {"command": "agent", "description": "set default engine"} in commands
-    assert any(cmd["command"] == "codex" for cmd in commands)
+    assert not any(cmd["command"] == "agent" for cmd in commands)
+    assert not any(cmd["command"] == "model" for cmd in commands)
+    assert not any(cmd["command"] == "reasoning" for cmd in commands)
+    assert any(cmd["command"] == PUBLIC_ENGINE_ID for cmd in commands)
+    assert not any(cmd["command"] == "codex" for cmd in commands)
 
 
 def test_build_bot_commands_includes_projects() -> None:
@@ -180,6 +197,8 @@ def test_build_bot_commands_includes_topics_when_enabled() -> None:
     commands = build_bot_commands(runtime, include_topics=True)
 
     assert {"command": "topic", "description": "create or bind a topic"} in commands
+    assert {"command": "pause", "description": "pause this topic"} in commands
+    assert {"command": "resume", "description": "resume this topic"} in commands
     assert {"command": "ctx", "description": "show or update context"} in commands
 
 
@@ -233,7 +252,8 @@ def test_build_bot_commands_caps_total() -> None:
     commands = build_bot_commands(runtime)
 
     assert len(commands) == 100
-    assert any(cmd["command"] == "codex" for cmd in commands)
+    assert any(cmd["command"] == PUBLIC_ENGINE_ID for cmd in commands)
+    assert not any(cmd["command"] == "codex" for cmd in commands)
     assert any(cmd["command"] == "cancel" for cmd in commands)
 
 
@@ -246,6 +266,18 @@ def test_telegram_presenter_progress_shows_cancel_button() -> None:
     reply_markup = rendered.extra["reply_markup"]
     assert reply_markup["inline_keyboard"][0][0]["text"] == "cancel"
     assert reply_markup["inline_keyboard"][0][0]["callback_data"] == "takopi:cancel"
+
+
+def test_telegram_presenter_shows_tool_calls() -> None:
+    presenter = TelegramPresenter()
+    tracker = ProgressTracker(engine="codex")
+    tracker.note_event(action_started("t-1", "tool", "github.search_issues"))
+    tracker.note_event(action_started("n-1", "note", "keep me"))
+
+    rendered = presenter.render_progress(tracker.snapshot(), elapsed_s=0.0)
+
+    assert "tool: github.search_issues" in rendered.text
+    assert "keep me" in rendered.text
 
 
 def test_telegram_presenter_clears_button_on_cancelled() -> None:
@@ -726,67 +758,9 @@ async def test_handle_file_put_writes_file(tmp_path: Path) -> None:
     target = tmp_path / "uploads" / "hello.txt"
     assert target.read_bytes() == payload
     assert transport.send_calls
-    text = transport.send_calls[-1]["message"].text
+    text = transport.send_calls[-1]["message"].text.strip()
     assert "saved uploads/hello.txt" in text
     assert "(5 b)" in text
-
-
-@pytest.mark.anyio
-async def test_handle_file_get_sends_document_for_allowed_user(
-    tmp_path: Path,
-) -> None:
-    payload = b"fetch"
-    target = tmp_path / "hello.txt"
-    target.write_bytes(payload)
-
-    transport = FakeTransport()
-    bot = FakeBot()
-    runner = ScriptRunner([Return(answer="ok")], engine=CODEX_ENGINE)
-    projects = ProjectsConfig(
-        projects={
-            "proj": ProjectConfig(
-                alias="proj",
-                path=tmp_path,
-                worktrees_dir=Path(".worktrees"),
-            )
-        },
-        default_project=None,
-    )
-    runtime = TransportRuntime(router=_make_router(runner), projects=projects)
-    exec_cfg = ExecBridgeConfig(
-        transport=transport,
-        presenter=MarkdownPresenter(),
-        final_notify=True,
-    )
-    cfg = TelegramBridgeConfig(
-        bot=bot,
-        runtime=runtime,
-        chat_id=123,
-        startup_msg="",
-        exec_cfg=exec_cfg,
-        forward_coalesce_s=FAST_FORWARD_COALESCE_S,
-        media_group_debounce_s=FAST_MEDIA_GROUP_DEBOUNCE_S,
-        files=TelegramFilesSettings(
-            enabled=True,
-            allowed_user_ids=[42],
-        ),
-    )
-    msg = TelegramIncomingMessage(
-        transport="telegram",
-        chat_id=-100,
-        message_id=10,
-        text="",
-        reply_to_message_id=None,
-        reply_to_text=None,
-        sender_id=42,
-        chat_type="supergroup",
-    )
-
-    await _handle_file_get(cfg, msg, "/proj hello.txt", None, None)
-
-    assert bot.document_calls
-    assert bot.document_calls[0]["filename"] == "hello.txt"
-    assert bot.document_calls[0]["content"] == payload
 
 
 @pytest.mark.anyio
@@ -1175,227 +1149,30 @@ async def test_topic_command_recreates_stale_topic(tmp_path: Path) -> None:
 
 
 @pytest.mark.anyio
-async def test_model_command_show_reports_overrides(tmp_path: Path) -> None:
-    transport = FakeTransport()
-    cfg = make_cfg(transport)
-    cfg = replace(cfg, topics=TelegramTopicsSettings(enabled=True, scope="main"))
+async def test_engine_run_options_ignore_overrides(tmp_path: Path) -> None:
     chat_prefs = ChatPrefsStore(tmp_path / "telegram_chat_prefs_state.json")
     topic_store = TopicStateStore(tmp_path / "telegram_topics_state.json")
     await chat_prefs.set_engine_override(
         123,
         CODEX_ENGINE,
-        EngineOverrides(model="gpt-4.1-mini", reasoning=None),
+        EngineOverrides(model="gpt-4.1-mini", reasoning="low"),
     )
     await topic_store.set_engine_override(
         123,
         77,
         CODEX_ENGINE,
-        EngineOverrides(model="gpt-4.1", reasoning=None),
+        EngineOverrides(model="gpt-4.1", reasoning="high"),
     )
-    msg = TelegramIncomingMessage(
-        transport="telegram",
+
+    run_options = await telegram_loop._resolve_engine_run_options(
         chat_id=123,
-        message_id=10,
-        text="/model",
-        reply_to_message_id=None,
-        reply_to_text=None,
-        sender_id=123,
         thread_id=77,
-    )
-
-    await _handle_model_command(
-        cfg,
-        msg,
-        "",
-        ambient_context=None,
-        topic_store=topic_store,
+        engine=CODEX_ENGINE,
         chat_prefs=chat_prefs,
-        resolved_scope="main",
-        scope_chat_ids=frozenset({123}),
-    )
-
-    text = transport.send_calls[-1]["message"].text
-    assert "engine: codex (global default)" in text
-    assert "model: gpt-4.1 (topic override)" in text
-    assert "defaults: topic: gpt-4.1, chat: gpt-4.1-mini" in text
-    assert "available engines: codex" in text
-
-
-@pytest.mark.anyio
-async def test_model_command_set_and_clear_chat_override(tmp_path: Path) -> None:
-    transport = FakeTransport()
-    cfg = make_cfg(transport)
-    chat_prefs = ChatPrefsStore(tmp_path / "telegram_chat_prefs_state.json")
-    await chat_prefs.set_engine_override(
-        123,
-        CODEX_ENGINE,
-        EngineOverrides(model=None, reasoning="low"),
-    )
-    msg = TelegramIncomingMessage(
-        transport="telegram",
-        chat_id=123,
-        message_id=10,
-        text="/model set gpt-4.1-mini",
-        reply_to_message_id=None,
-        reply_to_text=None,
-        sender_id=456,
-        chat_type="supergroup",
-    )
-
-    await _handle_model_command(
-        cfg,
-        msg,
-        "set gpt-4.1-mini",
-        ambient_context=None,
-        topic_store=None,
-        chat_prefs=chat_prefs,
-    )
-
-    override = await chat_prefs.get_engine_override(123, CODEX_ENGINE)
-    assert override is not None
-    assert override.model == "gpt-4.1-mini"
-    assert override.reasoning == "low"
-    assert (
-        "chat model override set to gpt-4.1-mini for codex."
-        in transport.send_calls[-1]["message"].text
-    )
-
-    msg_clear = replace(
-        msg,
-        message_id=11,
-        text="/model clear codex",
-    )
-    await _handle_model_command(
-        cfg,
-        msg_clear,
-        "clear codex",
-        ambient_context=None,
-        topic_store=None,
-        chat_prefs=chat_prefs,
-    )
-
-    override = await chat_prefs.get_engine_override(123, CODEX_ENGINE)
-    assert override is not None
-    assert override.model is None
-    assert override.reasoning == "low"
-    assert "chat model override cleared." in transport.send_calls[-1]["message"].text
-
-
-@pytest.mark.anyio
-async def test_reasoning_command_set_and_clear_topic_override(tmp_path: Path) -> None:
-    transport = FakeTransport()
-    cfg = make_cfg(transport)
-    cfg = replace(cfg, topics=TelegramTopicsSettings(enabled=True, scope="main"))
-    topic_store = TopicStateStore(tmp_path / "telegram_topics_state.json")
-    await topic_store.set_engine_override(
-        123,
-        77,
-        CODEX_ENGINE,
-        EngineOverrides(model="gpt-4.1-mini", reasoning=None),
-    )
-    msg = TelegramIncomingMessage(
-        transport="telegram",
-        chat_id=123,
-        message_id=10,
-        text="/reasoning set High",
-        reply_to_message_id=None,
-        reply_to_text=None,
-        sender_id=456,
-        chat_type="supergroup",
-        thread_id=77,
-    )
-
-    await _handle_reasoning_command(
-        cfg,
-        msg,
-        "set High",
-        ambient_context=None,
         topic_store=topic_store,
-        chat_prefs=None,
-        resolved_scope="main",
-        scope_chat_ids=frozenset({123}),
     )
 
-    override = await topic_store.get_engine_override(123, 77, CODEX_ENGINE)
-    assert override is not None
-    assert override.model == "gpt-4.1-mini"
-    assert override.reasoning == "high"
-    assert (
-        "topic reasoning override set to high for codex."
-        in transport.send_calls[-1]["message"].text
-    )
-
-    msg_clear = replace(
-        msg,
-        message_id=11,
-        text="/reasoning clear",
-    )
-    await _handle_reasoning_command(
-        cfg,
-        msg_clear,
-        "clear",
-        ambient_context=None,
-        topic_store=topic_store,
-        chat_prefs=None,
-        resolved_scope="main",
-        scope_chat_ids=frozenset({123}),
-    )
-
-    override = await topic_store.get_engine_override(123, 77, CODEX_ENGINE)
-    assert override is not None
-    assert override.model == "gpt-4.1-mini"
-    assert override.reasoning is None
-    assert (
-        "topic reasoning override cleared (using chat default)."
-        in transport.send_calls[-1]["message"].text
-    )
-
-
-@pytest.mark.anyio
-async def test_reasoning_command_show_reports_overrides(tmp_path: Path) -> None:
-    transport = FakeTransport()
-    cfg = make_cfg(transport)
-    cfg = replace(cfg, topics=TelegramTopicsSettings(enabled=True, scope="main"))
-    chat_prefs = ChatPrefsStore(tmp_path / "telegram_chat_prefs_state.json")
-    topic_store = TopicStateStore(tmp_path / "telegram_topics_state.json")
-    await chat_prefs.set_engine_override(
-        123,
-        CODEX_ENGINE,
-        EngineOverrides(model=None, reasoning="low"),
-    )
-    await topic_store.set_engine_override(
-        123,
-        88,
-        CODEX_ENGINE,
-        EngineOverrides(model=None, reasoning="high"),
-    )
-    msg = TelegramIncomingMessage(
-        transport="telegram",
-        chat_id=123,
-        message_id=10,
-        text="/reasoning",
-        reply_to_message_id=None,
-        reply_to_text=None,
-        sender_id=123,
-        thread_id=88,
-    )
-
-    await _handle_reasoning_command(
-        cfg,
-        msg,
-        "",
-        ambient_context=None,
-        topic_store=topic_store,
-        chat_prefs=chat_prefs,
-        resolved_scope="main",
-        scope_chat_ids=frozenset({123}),
-    )
-
-    text = transport.send_calls[-1]["message"].text
-    assert "engine: codex (global default)" in text
-    assert "reasoning: high (topic override)" in text
-    assert "defaults: topic: high, chat: low" in text
-    assert "available levels: minimal, low, medium, high, xhigh" in text
+    assert run_options is None
 
 
 @pytest.mark.anyio
@@ -1830,7 +1607,7 @@ async def test_run_main_loop_persists_topic_sessions_in_project_scope(
 
 
 @pytest.mark.anyio
-async def test_run_main_loop_auto_resumes_topic_default_engine(
+async def test_run_main_loop_auto_resumes_config_default_engine(
     tmp_path: Path,
 ) -> None:
     state_path = tmp_path / "takopi.toml"
@@ -1904,11 +1681,11 @@ async def test_run_main_loop_auto_resumes_topic_default_engine(
 
     await run_main_loop(cfg, poller)
 
-    assert codex_runner.calls == []
-    assert len(claude_runner.calls) == 1
-    assert claude_runner.calls[0][1] == ResumeToken(
-        engine="claude", value="resume-claude"
+    assert len(codex_runner.calls) == 1
+    assert codex_runner.calls[0][1] == ResumeToken(
+        engine=CODEX_ENGINE, value="resume-codex"
     )
+    assert claude_runner.calls == []
 
 
 @pytest.mark.anyio
@@ -2182,7 +1959,7 @@ async def test_run_main_loop_voice_transcript_preserves_directive(
         api_key: str | None = None,
     ) -> str:
         _ = bot, msg, enabled, model, max_bytes, reply, base_url, api_key
-        return "/codex do thing"
+        return f"/{PUBLIC_ENGINE_ID} do thing"
 
     monkeypatch.setattr(telegram_loop, "transcribe_voice", _fake_transcribe)
     monkeypatch.setattr(telegram_loop, "list_command_ids", lambda **_: [])
@@ -2247,7 +2024,7 @@ async def test_run_main_loop_debounces_forwarded_messages_preserves_directives()
             transport="telegram",
             chat_id=123,
             message_id=1,
-            text="/codex summarize these",
+            text=f"/{PUBLIC_ENGINE_ID} summarize these",
             reply_to_message_id=None,
             reply_to_text=None,
             sender_id=123,
@@ -3610,3 +3387,51 @@ async def test_run_main_loop_mentions_only_skips_voice_and_files(
     assert calls["voice"] == 0
     assert calls["file"] == 0
     assert runner.calls == []
+
+
+@pytest.mark.anyio
+async def test_run_main_loop_ignores_forum_root_when_configured(tmp_path) -> None:
+    transport = FakeTransport()
+    bot = FakeBot()
+    runner = ScriptRunner([Return(answer="ok")], engine=CODEX_ENGINE)
+    exec_cfg = ExecBridgeConfig(
+        transport=transport,
+        presenter=MarkdownPresenter(),
+        final_notify=True,
+    )
+    config_path = tmp_path / "takopi.toml"
+    runtime = TransportRuntime(
+        router=_make_router(runner),
+        projects=_empty_projects(),
+        config_path=config_path,
+    )
+    cfg = TelegramBridgeConfig(
+        bot=bot,
+        runtime=runtime,
+        chat_id=123,
+        startup_msg="",
+        exec_cfg=exec_cfg,
+        forward_coalesce_s=FAST_FORWARD_COALESCE_S,
+        media_group_debounce_s=FAST_MEDIA_GROUP_DEBOUNCE_S,
+        topics=TelegramTopicsSettings(enabled=True, scope="all", ignore_root=True),
+    )
+
+    async def poller(_cfg: TelegramBridgeConfig):
+        yield TelegramIncomingMessage(
+            transport="telegram",
+            chat_id=123,
+            message_id=1,
+            text="hello",
+            reply_to_message_id=None,
+            reply_to_text=None,
+            sender_id=123,
+            thread_id=None,
+            is_topic_message=False,
+            chat_type="supergroup",
+            is_forum=True,
+        )
+
+    await run_main_loop(cfg, poller)
+
+    assert runner.calls == []
+    assert transport.send_calls == []
