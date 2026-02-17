@@ -35,7 +35,7 @@ Notes:
 
 - File transfer is **disabled by default**.
 - If `allowed_user_ids` is empty, private chats are allowed and group usage requires admin privileges.
-- File size limits default to 20 MiB upload / 50 MiB download; override with `max_upload_bytes` and `max_download_bytes`.
+- File size limits default to 20 MiB upload / 50 MiB download; values are bytes (1 MiB = 1,048,576 bytes). Override with `max_upload_bytes` and `max_download_bytes`.
 
 ## Upload a file (`/file put`)
 
