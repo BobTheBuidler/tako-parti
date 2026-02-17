@@ -76,11 +76,14 @@ When `allowed_user_ids` is set, updates without a sender id (for example, some c
 | `uploads_dir` | string | `"incoming"` | Relative path inside the repo/worktree. |
 | `allowed_user_ids` | int[] | `[]` | Allowed senders for file transfer; empty allows private chats (group usage requires admin). |
 | `deny_globs` | string[] | (defaults) | Glob denylist (e.g. `.git/**`, `**/*.pem`). |
+| `max_upload_bytes` | int | `20971520` | Max upload size (bytes). |
+| `max_download_bytes` | int | `52428800` | Max download size (bytes). |
 
-File size limits (not configurable):
+File size limits (configurable):
 
-- uploads: 20 MiB
-- downloads: 50 MiB
+- uploads: `max_upload_bytes` (default 20 MiB)
+- downloads: `max_download_bytes` (default 50 MiB)
+- values are bytes (1 MiB = 1,048,576 bytes)
 
 ## `projects.<alias>`
 

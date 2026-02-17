@@ -11,6 +11,8 @@ Upload files into the active repo/worktree or fetch files back into Telegram.
     takopi config set transports.telegram.files.auto_put true
     takopi config set transports.telegram.files.auto_put_mode "upload"
     takopi config set transports.telegram.files.uploads_dir "incoming"
+    takopi config set transports.telegram.files.max_upload_bytes 20971520
+    takopi config set transports.telegram.files.max_download_bytes 52428800
     takopi config set transports.telegram.files.allowed_user_ids "[123456789]"
     takopi config set transports.telegram.files.deny_globs '[".git/**", ".env", ".envrc", "**/*.pem", "**/.ssh/**"]'
     ```
@@ -23,6 +25,8 @@ Upload files into the active repo/worktree or fetch files back into Telegram.
     auto_put = true
     auto_put_mode = "upload" # upload | prompt
     uploads_dir = "incoming"
+    max_upload_bytes = 20971520
+    max_download_bytes = 52428800
     allowed_user_ids = [123456789]
     deny_globs = [".git/**", ".env", ".envrc", "**/*.pem", "**/.ssh/**"]
     ```
@@ -31,6 +35,7 @@ Notes:
 
 - File transfer is **disabled by default**.
 - If `allowed_user_ids` is empty, private chats are allowed and group usage requires admin privileges.
+- File size limits default to 20 MiB upload / 50 MiB download; values are bytes (1 MiB = 1,048,576 bytes). Override with `max_upload_bytes` and `max_download_bytes`.
 
 ## Upload a file (`/file put`)
 
