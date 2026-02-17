@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, ClassVar, Literal
 from collections.abc import Iterable
 
 from pydantic import (
@@ -24,9 +24,13 @@ from .config import (
     ProjectsConfig,
 )
 from .config_migrations import migrate_config_file
+from .engine_aliases import INTERNAL_ENGINE_ID, PUBLIC_ENGINE_ID
+from .logging import get_logger
 
 
 NonEmptyStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+logger = get_logger(__name__)
 
 
 def _normalize_engine_id(
@@ -36,6 +40,14 @@ def _normalize_engine_id(
     config_path: Path,
     label: str,
 ) -> str:
+    if value.lower() == PUBLIC_ENGINE_ID:
+        logger.warning(
+            "config.engine_alias",
+            label=label,
+            engine=value,
+            mapped=INTERNAL_ENGINE_ID,
+        )
+        value = INTERNAL_ENGINE_ID
     engine_map = {engine.lower(): engine for engine in engine_ids}
     engine = engine_map.get(value.lower())
     if engine is None:
@@ -58,13 +70,14 @@ class TelegramTopicsSettings(BaseModel):
 
     enabled: bool = False
     scope: Literal["auto", "main", "projects", "all"] = "auto"
+    ignore_root: bool = False
 
 
 class TelegramFilesSettings(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    max_upload_bytes: int = 20 * 1024 * 1024
-    max_download_bytes: int = 50 * 1024 * 1024
+    max_upload_bytes: ClassVar[int] = 20 * 1024 * 1024
+    max_download_bytes: ClassVar[int] = 50 * 1024 * 1024
 
     enabled: bool = False
     auto_put: bool = True
@@ -214,6 +227,7 @@ class TakopiSettings(BaseSettings):
         default_chat_id = self.transports.telegram.chat_id
 
         reserved_lower = {value.lower() for value in reserved}
+        reserved_lower.add(PUBLIC_ENGINE_ID)
         engine_map = {engine.lower(): engine for engine in engine_ids}
         projects: dict[str, ProjectConfig] = {}
         chat_map: dict[int, str] = {}
