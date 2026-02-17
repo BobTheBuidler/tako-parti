@@ -651,15 +651,6 @@ class ForwardCoalescer:
             "forward.prompt.run",
             chat_id=pending.msg.chat_id,
             thread_id=pending.msg.thread_id,
-<<<<<<< HEAD
-           …7751 tokens truncated….topic_key, resolved.context
-                    )
-                    await _maybe_rename_topic(
-                        cfg,
-                        state.topic_store,
-                        chat_id=pending.topic_key[0],
-                        thread_id=pending.topic_key[1],
-=======
             sender_id=pending.msg.sender_id,
             message_id=pending.msg.message_id,
             forward_count=len(pending.forwards),
@@ -1326,27 +1317,17 @@ async def run_main_loop(
                         state.topic_store,
                         chat_id=topic_key[0],
                         thread_id=topic_key[1],
->>>>>>> upstream/master
                         context=resolved.context,
                     )
                     effective_context = resolved.context
                 if (
                     state.topic_store is not None
-<<<<<<< HEAD
-                    and pending.topic_key is not None
-=======
                     and topic_key is not None
->>>>>>> upstream/master
                     and effective_context is None
                     and resolved.context_source not in {"directives", "reply_ctx"}
                 ):
                     await reply(
                         text="this topic isn't bound to a project yet.\n"
-<<<<<<< HEAD
-                        f"{_usage_ctx_set(chat_project=pending.chat_project)} or "
-                        f"{_usage_topic(chat_project=pending.chat_project)}",
-                    )
-=======
                         f"{_usage_ctx_set(chat_project=chat_project)} or "
                         f"{_usage_topic(chat_project=chat_project)}",
                     )
@@ -1502,7 +1483,6 @@ async def run_main_loop(
                     reply=reply,
                 )
                 if not ok:
->>>>>>> upstream/master
                     return
                 await dispatch_prompt_run(
                     msg=msg,
