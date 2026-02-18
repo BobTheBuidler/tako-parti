@@ -7,6 +7,7 @@ from typing import Literal
 import anyio
 
 from ..backends import EngineBackend
+from ..config import ConfigError
 from ..logging import get_logger
 from ..runner_bridge import ExecBridgeConfig
 from ..settings import TelegramTopicsSettings, TelegramTransportSettings
@@ -18,7 +19,7 @@ from .bridge import (
     TelegramTransport,
     run_main_loop,
 )
-from .client import TelegramClient
+from .client import TelegramClient, is_group_chat_id
 from .onboarding import check_setup, interactive_setup
 from .topics import _resolve_topics_scope_raw
 
@@ -80,6 +81,22 @@ def _build_startup_message(
     )
 
 
+def _validate_ignore_private_chats(
+    settings: TelegramTransportSettings,
+    runtime: TransportRuntime,
+    chat_id: int,
+) -> None:
+    if not settings.ignore_private_chats:
+        return
+    allowed = {chat_id, *runtime.project_chat_ids()}
+    allowed = {allowed_id for allowed_id in allowed if is_group_chat_id(allowed_id)}
+    if not allowed:
+        raise ConfigError(
+            "ignore_private_chats is enabled but no group chat ids are configured. "
+            "Set transports.telegram.chat_id to a group chat id, or bind project chat ids."
+        )
+
+
 class TelegramBackend(TransportBackend):
     id = "telegram"
     description = "Telegram bot"
@@ -119,6 +136,7 @@ class TelegramBackend(TransportBackend):
             show_resume_line=settings.show_resume_line,
             topics=settings.topics,
         )
+        _validate_ignore_private_chats(settings, runtime, chat_id)
         bot = TelegramClient(token)
         transport = TelegramTransport(bot)
         presenter = TelegramPresenter(message_overflow=settings.message_overflow)
