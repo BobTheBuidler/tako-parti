@@ -22,6 +22,7 @@ def build_bot_commands(
     *,
     include_file: bool = True,
     include_topics: bool = False,
+    file_allow_get: bool = True,
 ) -> list[dict[str, str]]:
     commands: list[dict[str, str]] = []
     seen: set[str] = set()
@@ -89,7 +90,8 @@ def build_bot_commands(
             commands.append({"command": cmd, "description": description})
             seen.add(cmd)
     if include_file and "file" not in seen:
-        commands.append({"command": "file", "description": "upload or fetch files"})
+        description = "upload or fetch files" if file_allow_get else "upload files"
+        commands.append({"command": "file", "description": description})
         seen.add("file")
     if "cancel" not in seen:
         commands.append({"command": "cancel", "description": "cancel run"})
@@ -118,6 +120,7 @@ async def _set_command_menu(cfg: TelegramBridgeConfig) -> None:
         cfg.runtime,
         include_file=cfg.files.enabled,
         include_topics=cfg.topics.enabled,
+        file_allow_get=cfg.files.allow_get,
     )
     if not commands:
         return

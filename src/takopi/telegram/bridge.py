@@ -321,6 +321,7 @@ def build_bot_commands(
     *,
     include_file: bool = True,
     include_topics: bool = False,
+    file_allow_get: bool = True,
 ):
     from .commands import build_bot_commands as _build
 
@@ -328,6 +329,7 @@ def build_bot_commands(
         runtime,
         include_file=include_file,
         include_topics=include_topics,
+        file_allow_get=file_allow_get,
     )
 
 
