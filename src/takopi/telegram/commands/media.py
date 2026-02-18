@@ -59,7 +59,9 @@ async def _handle_media_group(
     )
     command_id, args_text = _parse_slash_command(command_msg.text)
     if command_id == "file":
-        command, rest, error = parse_file_command(args_text)
+        command, rest, error = parse_file_command(
+            args_text, allow_get=cfg.files.allow_get
+        )
         if error is not None:
             await reply(text=error)
             return

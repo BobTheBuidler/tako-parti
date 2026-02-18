@@ -67,6 +67,7 @@ class TelegramFilesSettings(BaseModel):
     max_download_bytes: int = 50 * 1024 * 1024
 
     enabled: bool = False
+    allow_get: bool = True
     auto_put: bool = True
     auto_put_mode: Literal["upload", "prompt"] = "upload"
     uploads_dir: NonEmptyStr = "incoming"
