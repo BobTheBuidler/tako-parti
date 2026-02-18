@@ -70,7 +70,7 @@ When `allowed_user_ids` is set, updates without a sender id (for example, some c
 
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
-| `enabled` | bool | `false` | Enable `/file put` and `/file get`. |
+| `enabled` | bool | `false` | Enable `/file put` (and `/file get` when `allow_get` is true). |
 | `allow_get` | bool | `true` | Allow `/file get` downloads; when false, downloads are disabled and usage only shows `/file put`. |
 | `auto_put` | bool | `true` | Auto-save uploads. |
 | `auto_put_mode` | `"upload"`\|`"prompt"` | `"upload"` | Whether uploads also start a run. |

@@ -7,7 +7,7 @@ from ...context import RunContext
 from ...directives import DirectiveError
 from ...transport_runtime import ResolvedMessage
 from ..context import _merge_topic_context
-from ..files import parse_file_command
+from ..files import file_usage, parse_file_command
 from ..quote import apply_quote_to_prompt
 from ..topic_state import TopicStateStore
 from ..topics import _topic_key, _topics_chat_project
@@ -64,6 +64,11 @@ async def _handle_media_group(
         )
         if error is not None:
             await reply(text=error)
+            return
+        if command == "get" and not cfg.files.allow_get:
+            await reply(
+                text=f"file downloads are disabled.\n\n{file_usage(allow_get=False)}"
+            )
             return
         if command == "put":
             await _handle_file_put_group(

@@ -56,6 +56,22 @@ async def test_media_group_file_command_reports_usage() -> None:
 
 
 @pytest.mark.anyio
+async def test_media_group_file_get_disabled_reports_message() -> None:
+    transport = FakeTransport()
+    files = TelegramFilesSettings(enabled=True, allow_get=False)
+    cfg = replace(make_cfg(transport), files=files)
+    msg = _msg("/file get notes.txt")
+
+    await media_commands._handle_media_group(cfg, [msg], topic_store=None)
+
+    assert transport.send_calls
+    text = transport.send_calls[-1]["message"].text
+    assert "file downloads are disabled" in text
+    assert "usage: /file put <path>" in text
+    assert "get <path>" not in text
+
+
+@pytest.mark.anyio
 async def test_media_group_file_put_delegates(monkeypatch) -> None:
     transport = FakeTransport()
     cfg = make_cfg(transport)
