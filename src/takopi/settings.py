@@ -58,6 +58,7 @@ class TelegramTopicsSettings(BaseModel):
 
     enabled: bool = False
     scope: Literal["auto", "main", "projects", "all"] = "auto"
+    ignore_root: bool = False
 
 
 class TelegramFilesSettings(BaseModel):
