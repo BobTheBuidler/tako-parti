@@ -55,6 +55,20 @@ def test_parse_file_command_unknown_command() -> None:
     assert error == tg_files.file_usage()
 
 
+def test_parse_file_command_unknown_command_put_only() -> None:
+    command, rest, error = tg_files.parse_file_command("nope arg", allow_get=False)
+    assert command is None
+    assert rest == "arg"
+    assert error == tg_files.file_usage(allow_get=False)
+
+
+def test_parse_file_command_empty_put_only() -> None:
+    command, rest, error = tg_files.parse_file_command("", allow_get=False)
+    assert command is None
+    assert rest == ""
+    assert error == tg_files.file_usage(allow_get=False)
+
+
 def test_parse_file_prompt_errors() -> None:
     path, force, error = tg_files.parse_file_prompt("--wat", allow_empty=False)
     assert path is None
