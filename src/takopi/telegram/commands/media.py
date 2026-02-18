@@ -3,11 +3,12 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING
 
+from ...config import ConfigError
 from ...context import RunContext
 from ...directives import DirectiveError
 from ...transport_runtime import ResolvedMessage
 from ..context import _merge_topic_context
-from ..files import parse_file_command
+from ..files import parse_file_command, render_image_attachment, resolve_path_within_root
 from ..quote import apply_quote_to_prompt
 from ..topic_state import TopicStateStore
 from ..topics import _topic_key, _topics_chat_project
@@ -125,10 +126,29 @@ async def _handle_media_group(
             files_text = "\n".join(f"- {path}" for path in paths)
             prompt_base = apply_quote_to_prompt(command_msg, resolved.prompt)
             annotation = f"[uploaded files]\n{files_text}"
+            attachments: list[str] = []
+            if saved_group.context is not None:
+                try:
+                    run_root = cfg.runtime.resolve_run_cwd(saved_group.context)
+                except ConfigError:
+                    run_root = None
+                if run_root is not None:
+                    for item in saved_group.saved:
+                        if item.rel_path is None:
+                            continue
+                        target = resolve_path_within_root(run_root, item.rel_path)
+                        if target is None:
+                            continue
+                        attachment = render_image_attachment(target)
+                        if attachment is not None:
+                            attachments.append(attachment)
+            parts = []
             if prompt_base and prompt_base.strip():
-                prompt = f"{prompt_base}\n\n{annotation}"
-            else:
-                prompt = annotation
+                parts.append(prompt_base)
+            parts.append(annotation)
+            if attachments:
+                parts.append("\n\n".join(attachments))
+            prompt = "\n\n".join(parts)
             await run_prompt(command_msg, prompt, resolved)
             return
         if not caption_text:

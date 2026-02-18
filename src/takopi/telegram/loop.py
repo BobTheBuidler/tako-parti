@@ -51,6 +51,7 @@ from .commands.handlers import (
 from .commands.parse import is_cancel_command
 from .commands.reply import make_reply
 from .context import _merge_topic_context, _usage_ctx_set, _usage_topic
+from .files import render_image_attachment, resolve_path_within_root
 from .topics import (
     _maybe_rename_topic,
     _resolve_topics_scope,
@@ -1246,6 +1247,25 @@ async def run_main_loop(
                     return f"{base}\n\n{annotation}"
                 return annotation
 
+            def _render_upload_attachment(
+                *,
+                context: RunContext | None,
+                rel_path: Path | None,
+                mime_type: str | None,
+            ) -> str | None:
+                if context is None or rel_path is None:
+                    return None
+                try:
+                    run_root = cfg.runtime.resolve_run_cwd(context)
+                except ConfigError:
+                    return None
+                if run_root is None:
+                    return None
+                target = resolve_path_within_root(run_root, rel_path)
+                if target is None:
+                    return None
+                return render_image_attachment(target, mime_type=mime_type)
+
             async def resolve_prompt_message(
                 msg: TelegramIncomingMessage,
                 text: str,
@@ -1525,6 +1545,13 @@ async def run_main_loop(
                 if saved is None:
                     return
                 annotation = f"[uploaded file: {saved.rel_path.as_posix()}]"
+                attachment = _render_upload_attachment(
+                    context=saved.context,
+                    rel_path=saved.rel_path,
+                    mime_type=msg.document.mime_type if msg.document else None,
+                )
+                if attachment is not None:
+                    annotation = f"{annotation}\n\n{attachment}"
                 prompt_base = apply_quote_to_prompt(msg, resolved.prompt)
                 prompt = _build_upload_prompt(prompt_base, annotation)
                 await run_prompt_from_upload(msg, prompt, resolved)
