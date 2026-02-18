@@ -19,6 +19,8 @@ from .topics import _handle_chat_new_command as handle_chat_new_command
 from .topics import _handle_chat_ctx_command as handle_chat_ctx_command
 from .topics import _handle_ctx_command as handle_ctx_command
 from .topics import _handle_new_command as handle_new_command
+from .topics import _handle_pause_command as handle_pause_command
+from .topics import _handle_resume_command as handle_resume_command
 from .topics import _handle_topic_command as handle_topic_command
 from .trigger import _handle_trigger_command as handle_trigger_command
 
@@ -34,7 +36,9 @@ __all__ = [
     "handle_media_group",
     "handle_model_command",
     "handle_new_command",
+    "handle_pause_command",
     "handle_reasoning_command",
+    "handle_resume_command",
     "handle_topic_command",
     "handle_trigger_command",
     "parse_slash_command",
