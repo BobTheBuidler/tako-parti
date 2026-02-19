@@ -258,11 +258,19 @@ async def _handle_chat_new_command(
     await reply(text=text)
 
 
-def _topic_helptext(runtime: TransportRuntime, aliases: list[str]) -> str:
+def _topic_helptext(
+    runtime: TransportRuntime,
+    aliases: list[str],
+    *,
+    chat_project: str | None,
+) -> str:
     alias_text = ""
     if aliases:
         alias_text = "\n".join(f"- `/{alias}`" for alias in aliases)
-    topic_help = "`/topic <alias> [@branch]`: bind this topic to a project."
+    if chat_project is None:
+        topic_help = "`/topic <alias> [@branch]`: bind this topic to a project."
+    else:
+        topic_help = "`/topic [@branch]`: bind this topic to the chat project."
     if alias_text:
         topic_help = f"{topic_help}\n{alias_text}"
     return topic_help
@@ -285,28 +293,46 @@ async def _handle_topic_command_inner(
     tokens: list[str],
     store: TopicStateStore,
     *,
+    chat_project: str | None,
     resolved_scope: str | None,
     scope_chat_ids: frozenset[int] | None,
 ) -> str:
     aliases = list(cfg.runtime.project_aliases())
     if tokens[0].lower() == "help":
-        return _topic_helptext(cfg.runtime, aliases)
+        return _topic_helptext(cfg.runtime, aliases, chat_project=chat_project)
     alias = tokens[0]
     rest_tokens = tokens[1:]
-    if len(rest_tokens) > 1:
-        return f"error:\ntoo many arguments\n{_usage_topic(chat_project=None)}"
     branch: str | None = None
-    if rest_tokens:
-        branch_token = rest_tokens[0]
-        if not branch_token.startswith("@"):
-            return f"error:\nbranch must be prefixed with @\n{_usage_topic(chat_project=None)}"
-        branch = branch_token[1:] or None
+    alias_lookup: str | None = None
+    if alias.startswith("@"):
+        if rest_tokens:
+            return f"error:\ntoo many arguments\n{_usage_topic(chat_project=chat_project)}"
+        if chat_project is None:
+            return f"error:\nproject is required\n{_usage_topic(chat_project=None)}"
+        alias_lookup = chat_project
+        branch = alias[1:] or None
+    else:
+        if len(rest_tokens) > 1:
+            return f"error:\ntoo many arguments\n{_usage_topic(chat_project=chat_project)}"
+        if rest_tokens:
+            branch_token = rest_tokens[0]
+            if not branch_token.startswith("@"):
+                return (
+                    f"error:\nbranch must be prefixed with @\n"
+                    f"{_usage_topic(chat_project=chat_project)}"
+                )
+            branch = branch_token[1:] or None
     tkey = _topic_key(msg, cfg, scope_chat_ids=scope_chat_ids)
     if tkey is None:
         return "this command only works inside a topic."
-    alias_lookup = _resolve_project_alias(cfg.runtime, alias)
     if alias_lookup is None:
-        alias_help = _topic_helptext(cfg.runtime, aliases)
+        alias_lookup = _resolve_project_alias(cfg.runtime, alias)
+    if alias_lookup is None:
+        alias_help = _topic_helptext(
+            cfg.runtime,
+            aliases,
+            chat_project=chat_project,
+        )
         return f"unknown project: {alias}\n\n{alias_help}"
     context = RunContext(project=alias_lookup, branch=branch)
     await store.set_context(*tkey, context)
@@ -339,15 +365,17 @@ async def _handle_topic_command(
     if error is not None:
         await reply(text=error)
         return
+    chat_project = _topics_chat_project(cfg, msg.chat_id)
     tokens = split_command_args(args_text)
     if not tokens:
-        await reply(text=_usage_topic(chat_project=None))
+        await reply(text=_usage_topic(chat_project=chat_project))
         return
     response = await _handle_topic_command_inner(
         cfg,
         msg,
         tokens,
         store,
+        chat_project=chat_project,
         resolved_scope=resolved_scope,
         scope_chat_ids=scope_chat_ids,
     )

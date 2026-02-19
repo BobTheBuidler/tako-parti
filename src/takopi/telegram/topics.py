@@ -115,9 +115,12 @@ def _topic_key(
         return None
     if not _topics_chat_allowed(cfg, msg.chat_id, scope_chat_ids=scope_chat_ids):
         return None
-    if msg.thread_id is None:
-        return None
-    return (msg.chat_id, msg.thread_id)
+    thread_id = msg.thread_id
+    if thread_id is None:
+        if cfg.topics.ignore_root:
+            return None
+        thread_id = 0
+    return (msg.chat_id, thread_id)
 
 
 def _topic_title(*, runtime: TransportRuntime, context: RunContext) -> str:
@@ -142,6 +145,8 @@ async def _maybe_rename_topic(
     context: RunContext,
     snapshot: TopicThreadSnapshot | None = None,
 ) -> None:
+    if thread_id == 0:
+        return
     title = _topic_title(runtime=cfg.runtime, context=context)
     if snapshot is None:
         snapshot = await store.get_thread(chat_id, thread_id)
