@@ -42,6 +42,7 @@ class _ThreadState(msgspec.Struct, forbid_unknown_fields=False):
     topic_title: str | None = None
     default_engine: str | None = None
     trigger_mode: str | None = None
+    paused: bool = False
     engine_overrides: dict[str, EngineOverrides] = msgspec.field(default_factory=dict)
 
 
@@ -190,6 +191,14 @@ class TopicStateStore(JsonStateStore[_TopicState]):
                 return None
             return _normalize_trigger_mode(thread.trigger_mode)
 
+    async def get_paused(self, chat_id: int, thread_id: int) -> bool:
+        async with self._lock:
+            self._reload_locked_if_needed()
+            thread = self._get_thread_locked(chat_id, thread_id)
+            if thread is None:
+                return False
+            return bool(thread.paused)
+
     async def get_engine_override(
         self, chat_id: int, thread_id: int, engine: str
     ) -> EngineOverrides | None:
@@ -225,6 +234,15 @@ class TopicStateStore(JsonStateStore[_TopicState]):
             self._reload_locked_if_needed()
             thread = self._ensure_thread_locked(chat_id, thread_id)
             thread.trigger_mode = normalized
+            self._save_locked()
+
+    async def set_paused(
+        self, chat_id: int, thread_id: int, paused: bool
+    ) -> None:
+        async with self._lock:
+            self._reload_locked_if_needed()
+            thread = self._ensure_thread_locked(chat_id, thread_id)
+            thread.paused = bool(paused)
             self._save_locked()
 
     async def clear_trigger_mode(self, chat_id: int, thread_id: int) -> None:
