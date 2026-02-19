@@ -83,7 +83,7 @@ def build_bot_commands(
         commands.append({"command": cmd, "description": description})
         seen.add(cmd)
     if include_topics:
-        for cmd, description in [("topic", "create or bind a topic")]:
+        for cmd, description in [("topic", "bind this topic")]:
             if cmd in seen:
                 continue
             commands.append({"command": cmd, "description": description})
