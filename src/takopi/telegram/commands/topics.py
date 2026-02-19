@@ -128,6 +128,10 @@ def _parse_chat_ctx_args(
     tokens = split_command_args(args_text)
     if not tokens:
         return None, _usage_ctx_set(chat_project=None)
+    if tokens[0].lower() == "set":
+        tokens = tokens[1:]
+        if not tokens:
+            return None, _usage_ctx_set(chat_project=None)
     if len(tokens) > 2:
         return None, "too many arguments"
     project_token: str | None = None
@@ -190,9 +194,8 @@ async def _handle_chat_ctx_command(
         await reply(text="\n".join(lines))
         return
     if action == "set":
-        rest = " ".join(tokens[1:])
         context, error = _parse_chat_ctx_args(
-            rest,
+            args_text,
             runtime=cfg.runtime,
             default_project=cfg.runtime.default_project,
         )
