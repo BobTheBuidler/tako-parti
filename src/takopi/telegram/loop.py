@@ -38,7 +38,9 @@ from .commands.handlers import (
     handle_media_group,
     handle_model_command,
     handle_new_command,
+    handle_pause_command,
     handle_reasoning_command,
+    handle_resume_command,
     handle_topic_command,
     handle_trigger_command,
     parse_slash_command,
@@ -237,6 +239,24 @@ def _dispatch_builtin_command(
                 cfg,
                 msg,
                 args_text,
+                topic_store,
+                resolved_scope=resolved_scope,
+                scope_chat_ids=scope_chat_ids,
+            )
+        elif command_id == "pause":
+            handler = partial(
+                handle_pause_command,
+                cfg,
+                msg,
+                topic_store,
+                resolved_scope=resolved_scope,
+                scope_chat_ids=scope_chat_ids,
+            )
+        elif command_id == "resume":
+            handler = partial(
+                handle_resume_command,
+                cfg,
+                msg,
                 topic_store,
                 resolved_scope=resolved_scope,
                 scope_chat_ids=scope_chat_ids,
@@ -814,6 +834,14 @@ class MediaGroupBuffer:
             messages = list(state.messages)
             del self._groups[key]
             if not messages:
+                return
+            if (
+                self._topic_store is not None
+                and messages[0].thread_id is not None
+                and await self._topic_store.get_paused(
+                    messages[0].chat_id, messages[0].thread_id
+                )
+            ):
                 return
             trigger_mode = await resolve_trigger_mode(
                 chat_id=messages[0].chat_id,
@@ -1671,6 +1699,13 @@ async def run_main_loop(
                         task_group=tg,
                     ),
                     command_id=command_id,
+                ):
+                    return
+
+                if (
+                    state.topic_store is not None
+                    and msg.thread_id is not None
+                    and await state.topic_store.get_paused(chat_id, msg.thread_id)
                 ):
                     return
 
