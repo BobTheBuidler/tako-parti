@@ -37,8 +37,8 @@ def _usage_ctx_set(*, chat_project: str | None) -> str:
 
 def _usage_topic(*, chat_project: str | None) -> str:
     if chat_project is not None:
-        return "usage: `/topic @branch`"
-    return "usage: `/topic <project> @branch`"
+        return "usage: `/topic [@branch]`"
+    return "usage: `/topic <project> [@branch]`"
 
 
 def _parse_project_branch_args(

@@ -3,9 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ...context import RunContext
-from ...markdown import MarkdownParts
 from ...transport_runtime import TransportRuntime
-from ...transport import RenderedMessage, SendOptions
 from ..chat_prefs import ChatPrefsStore
 from ..chat_sessions import ChatSessionStore
 from ..context import (
@@ -17,12 +15,10 @@ from ..context import (
     _usage_topic,
 )
 from ..files import split_command_args
-from ..render import prepare_telegram
 from ..topic_state import TopicStateStore
 from ..topics import (
     _maybe_rename_topic,
     _topic_key,
-    _topic_title,
     _topics_chat_project,
     _topics_command_error,
 )
@@ -262,6 +258,68 @@ async def _handle_chat_new_command(
     await reply(text=text)
 
 
+def _topic_helptext(runtime: TransportRuntime, aliases: list[str]) -> str:
+    alias_text = ""
+    if aliases:
+        alias_text = "\n".join(f"- `/{alias}`" for alias in aliases)
+    topic_help = "`/topic <alias> [@branch]`: bind this topic to a project."
+    if alias_text:
+        topic_help = f"{topic_help}\n{alias_text}"
+    return topic_help
+
+
+def _resolve_project_alias(runtime: TransportRuntime, alias: str) -> str | None:
+    key = runtime.normalize_project_key(alias)
+    if key is not None:
+        return key
+    alias_key = alias.strip().lower()
+    for project_key, project in runtime._projects.projects.items():
+        if project.alias.lower() == alias_key:
+            return project_key
+    return None
+
+
+async def _handle_topic_command_inner(
+    cfg: TelegramBridgeConfig,
+    msg: TelegramIncomingMessage,
+    tokens: list[str],
+    store: TopicStateStore,
+    *,
+    resolved_scope: str | None,
+    scope_chat_ids: frozenset[int] | None,
+) -> str:
+    aliases = list(cfg.runtime.project_aliases())
+    if tokens[0].lower() == "help":
+        return _topic_helptext(cfg.runtime, aliases)
+    alias = tokens[0]
+    rest_tokens = tokens[1:]
+    if len(rest_tokens) > 1:
+        return f"error:\ntoo many arguments\n{_usage_topic(chat_project=None)}"
+    branch: str | None = None
+    if rest_tokens:
+        branch_token = rest_tokens[0]
+        if not branch_token.startswith("@"):
+            return f"error:\nbranch must be prefixed with @\n{_usage_topic(chat_project=None)}"
+        branch = branch_token[1:] or None
+    tkey = _topic_key(msg, cfg, scope_chat_ids=scope_chat_ids)
+    if tkey is None:
+        return "this command only works inside a topic."
+    alias_lookup = _resolve_project_alias(cfg.runtime, alias)
+    if alias_lookup is None:
+        alias_help = _topic_helptext(cfg.runtime, aliases)
+        return f"unknown project: {alias}\n\n{alias_help}"
+    context = RunContext(project=alias_lookup, branch=branch)
+    await store.set_context(*tkey, context)
+    await _maybe_rename_topic(
+        cfg,
+        store,
+        chat_id=tkey[0],
+        thread_id=tkey[1],
+        context=context,
+    )
+    return f"bound topic to `{_format_context(cfg.runtime, context)}`"
+
+
 async def _handle_topic_command(
     cfg: TelegramBridgeConfig,
     msg: TelegramIncomingMessage,
@@ -281,52 +339,16 @@ async def _handle_topic_command(
     if error is not None:
         await reply(text=error)
         return
-    chat_project = _topics_chat_project(cfg, msg.chat_id)
-    context, error = _parse_project_branch_args(
-        args_text,
-        runtime=cfg.runtime,
-        require_branch=True,
-        chat_project=chat_project,
-    )
-    if error is not None or context is None:
-        usage = _usage_topic(chat_project=chat_project)
-        text = f"error:\n{error}\n{usage}" if error else usage
-        await reply(text=text)
+    tokens = split_command_args(args_text)
+    if not tokens:
+        await reply(text=_usage_topic(chat_project=None))
         return
-    title = _topic_title(runtime=cfg.runtime, context=context)
-    existing = await store.find_thread_for_context(msg.chat_id, context)
-    stale_thread_id: int | None = None
-    if existing is not None:
-        updated = await cfg.bot.edit_forum_topic(
-            chat_id=msg.chat_id,
-            message_thread_id=existing,
-            name=title,
-        )
-        if updated:
-            await reply(
-                text=f"topic already exists for {_format_context(cfg.runtime, context)} "
-                "in this chat.",
-            )
-            return
-        stale_thread_id = existing
-    created = await cfg.bot.create_forum_topic(msg.chat_id, title)
-    if created is None:
-        await reply(text="failed to create topic.")
-        return
-    thread_id = created.message_thread_id
-    if stale_thread_id is not None:
-        await store.delete_thread(msg.chat_id, stale_thread_id)
-    await store.set_context(
-        msg.chat_id,
-        thread_id,
-        context,
-        topic_title=title,
+    response = await _handle_topic_command_inner(
+        cfg,
+        msg,
+        tokens,
+        store,
+        resolved_scope=resolved_scope,
+        scope_chat_ids=scope_chat_ids,
     )
-    await reply(text=f"created topic `{title}`.")
-    bound_text = f"topic bound to `{_format_context(cfg.runtime, context)}`"
-    rendered_text, entities = prepare_telegram(MarkdownParts(header=bound_text))
-    await cfg.exec_cfg.transport.send(
-        channel_id=msg.chat_id,
-        message=RenderedMessage(text=rendered_text, extra={"entities": entities}),
-        options=SendOptions(thread_id=thread_id),
-    )
+    await reply(text=response)
