@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from takopi.context import RunContext
 from takopi.settings import TelegramTopicsSettings
 from takopi.config import ProjectConfig, ProjectsConfig
 from takopi.runners.mock import Return, ScriptRunner
@@ -14,6 +15,7 @@ from takopi.telegram.commands.topics import (
     _handle_ctx_command,
     _handle_new_command,
     _handle_topic_command,
+    _parse_chat_ctx_args,
 )
 from takopi.telegram.topic_state import TopicStateStore
 from takopi.telegram.types import TelegramIncomingMessage
@@ -116,6 +118,18 @@ async def test_chat_ctx_command_sets_binding(tmp_path: Path) -> None:
 
     text = transport.send_calls[-1]["message"].text
     assert "bound ctx: Alpha @dev" in text
+
+
+def test_chat_ctx_args_accept_set_prefix(tmp_path: Path) -> None:
+    runtime, _ = _runtime(tmp_path)
+    context, error = _parse_chat_ctx_args(
+        "set alpha @dev",
+        runtime=runtime,
+        default_project=runtime.default_project,
+    )
+
+    assert error is None
+    assert context == RunContext(project="alpha", branch="dev")
 
 
 @pytest.mark.anyio
