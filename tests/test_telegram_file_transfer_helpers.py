@@ -112,7 +112,7 @@ async def test_save_document_payload_rejects_large_file(tmp_path: Path) -> None:
         make_cfg(transport),
         bot=_FileBot(file_info=None, payload=None),
     )
-    document = _document(file_size=TelegramFilesSettings.max_upload_bytes + 1)
+    document = _document(file_size=cfg.files.max_upload_bytes + 1)
 
     result = await transfer._save_document_payload(
         cfg,
@@ -758,16 +758,14 @@ async def test_handle_file_get_sends_directory_zip(tmp_path: Path) -> None:
 
 
 @pytest.mark.anyio
-async def test_save_document_payload_rejects_large_payload(
-    tmp_path: Path, monkeypatch
-) -> None:
+async def test_save_document_payload_rejects_large_payload(tmp_path: Path) -> None:
     transport = FakeTransport()
     cfg = replace(
         make_cfg(transport),
+        files=TelegramFilesSettings(max_upload_bytes=1),
         bot=_FileBot(file_info=File(file_path="files/report.txt"), payload=b"xx"),
     )
     document = _document(file_name="report.txt", file_size=None)
-    monkeypatch.setattr(TelegramFilesSettings, "max_upload_bytes", 1)
 
     result = await transfer._save_document_payload(
         cfg,
@@ -1152,14 +1150,16 @@ async def test_handle_file_get_zip_too_large(tmp_path: Path, monkeypatch) -> Non
 
 
 @pytest.mark.anyio
-async def test_handle_file_get_file_too_large(tmp_path: Path, monkeypatch) -> None:
+async def test_handle_file_get_file_too_large(tmp_path: Path) -> None:
     transport = FakeTransport()
-    cfg = replace(make_cfg(transport), runtime=_runtime(tmp_path))
+    cfg = replace(
+        make_cfg(transport),
+        runtime=_runtime(tmp_path),
+        files=TelegramFilesSettings(max_download_bytes=1),
+    )
     target = tmp_path / "notes.txt"
     target.write_bytes(b"data")
     msg = _msg("/file get")
-
-    monkeypatch.setattr(TelegramFilesSettings, "max_download_bytes", 1)
 
     await transfer._handle_file_get(
         cfg,
