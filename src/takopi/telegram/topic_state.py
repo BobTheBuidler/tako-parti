@@ -236,9 +236,7 @@ class TopicStateStore(JsonStateStore[_TopicState]):
             thread.trigger_mode = normalized
             self._save_locked()
 
-    async def set_paused(
-        self, chat_id: int, thread_id: int, paused: bool
-    ) -> None:
+    async def set_paused(self, chat_id: int, thread_id: int, paused: bool) -> None:
         async with self._lock:
             self._reload_locked_if_needed()
             thread = self._ensure_thread_locked(chat_id, thread_id)
