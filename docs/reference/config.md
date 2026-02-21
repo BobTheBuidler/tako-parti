@@ -83,6 +83,7 @@ File size limits (configurable):
 
 - uploads: `max_upload_bytes` (default 20 MiB)
 - downloads: `max_download_bytes` (default 50 MiB)
+- inline prompt images: capped at 1 MiB
 - values are bytes (1 MiB = 1,048,576 bytes)
 
 ## `projects.<alias>`

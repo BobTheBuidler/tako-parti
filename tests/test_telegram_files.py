@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import io
 import zipfile
 from pathlib import Path
@@ -109,3 +110,34 @@ def test_format_bytes_various_units() -> None:
 def test_default_upload_name_fallbacks() -> None:
     assert tg_files.default_upload_name("", "files/report.txt") == "report.txt"
     assert tg_files.default_upload_name(None, None) == "upload.bin"
+
+
+def test_render_image_attachment_returns_data_uri(tmp_path: Path) -> None:
+    image = tmp_path / "a.png"
+    payload = b"\x89PNG\r\n\x1a\nfake"
+    image.write_bytes(payload)
+
+    attachment = tg_files.render_image_attachment(image, mime_type="image/png")
+
+    expected = base64.b64encode(payload).decode("ascii")
+    assert attachment == f"![a.png](data:image/png;base64,{expected})"
+
+
+def test_render_image_attachment_rejects_non_image(tmp_path: Path) -> None:
+    text = tmp_path / "a.txt"
+    text.write_text("hello", encoding="utf-8")
+
+    attachment = tg_files.render_image_attachment(text)
+
+    assert attachment is None
+
+
+def test_render_image_attachment_enforces_max_bytes(tmp_path: Path) -> None:
+    image = tmp_path / "a.png"
+    image.write_bytes(b"abcdef")
+
+    attachment = tg_files.render_image_attachment(
+        image, mime_type="image/png", max_bytes=3
+    )
+
+    assert attachment is None
