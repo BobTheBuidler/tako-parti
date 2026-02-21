@@ -1494,6 +1494,7 @@ async def run_main_loop(
                         forwarded,
                         prompt_text,
                     )
+                prompt_text = apply_quote_to_prompt(msg, prompt_text)
 
                 _effective_context, ok = await ensure_topic_context(
                     resolved=resolved,
