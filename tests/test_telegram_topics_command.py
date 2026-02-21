@@ -14,6 +14,8 @@ from takopi.telegram.commands.topics import (
     _handle_chat_new_command,
     _handle_ctx_command,
     _handle_new_command,
+    _handle_pause_command,
+    _handle_resume_command,
     _handle_topic_command,
     _parse_chat_ctx_args,
 )
@@ -152,6 +154,122 @@ async def test_new_command_requires_topic(tmp_path: Path) -> None:
 
     text = transport.send_calls[-1]["message"].text
     assert "only works inside a topic" in text
+
+
+@pytest.mark.anyio
+async def test_pause_command_requires_topic(tmp_path: Path) -> None:
+    transport = FakeTransport()
+    cfg = replace(
+        make_cfg(transport),
+        topics=TelegramTopicsSettings(enabled=True, scope="all"),
+    )
+    store = TopicStateStore(tmp_path / "topics.json")
+    msg = _msg("/pause")
+
+    await _handle_pause_command(
+        cfg,
+        msg,
+        store=store,
+        resolved_scope="all",
+        scope_chat_ids=frozenset({msg.chat_id}),
+    )
+
+    text = transport.send_calls[-1]["message"].text
+    assert "only works inside a topic" in text
+
+
+@pytest.mark.anyio
+async def test_pause_command_sets_state(tmp_path: Path) -> None:
+    transport = FakeTransport()
+    cfg = replace(
+        make_cfg(transport),
+        topics=TelegramTopicsSettings(enabled=True, scope="all"),
+    )
+    store = TopicStateStore(tmp_path / "topics.json")
+    msg = _msg("/pause", thread_id=77)
+
+    await _handle_pause_command(
+        cfg,
+        msg,
+        store=store,
+        resolved_scope="all",
+        scope_chat_ids=frozenset({msg.chat_id}),
+    )
+
+    assert await store.get_paused(msg.chat_id, 77) is True
+    text = transport.send_calls[-1]["message"].text
+    assert "topic paused" in text
+
+
+@pytest.mark.anyio
+async def test_pause_command_reports_already_paused(tmp_path: Path) -> None:
+    transport = FakeTransport()
+    cfg = replace(
+        make_cfg(transport),
+        topics=TelegramTopicsSettings(enabled=True, scope="all"),
+    )
+    store = TopicStateStore(tmp_path / "topics.json")
+    await store.set_paused(123, 77, True)
+    msg = _msg("/pause", thread_id=77)
+
+    await _handle_pause_command(
+        cfg,
+        msg,
+        store=store,
+        resolved_scope="all",
+        scope_chat_ids=frozenset({msg.chat_id}),
+    )
+
+    text = transport.send_calls[-1]["message"].text
+    assert "already paused" in text
+    assert await store.get_paused(msg.chat_id, 77) is True
+
+
+@pytest.mark.anyio
+async def test_resume_command_reports_already_active(tmp_path: Path) -> None:
+    transport = FakeTransport()
+    cfg = replace(
+        make_cfg(transport),
+        topics=TelegramTopicsSettings(enabled=True, scope="all"),
+    )
+    store = TopicStateStore(tmp_path / "topics.json")
+    msg = _msg("/resume", thread_id=77)
+
+    await _handle_resume_command(
+        cfg,
+        msg,
+        store=store,
+        resolved_scope="all",
+        scope_chat_ids=frozenset({msg.chat_id}),
+    )
+
+    text = transport.send_calls[-1]["message"].text
+    assert "already active" in text
+    assert await store.get_paused(msg.chat_id, 77) is False
+
+
+@pytest.mark.anyio
+async def test_resume_command_clears_state(tmp_path: Path) -> None:
+    transport = FakeTransport()
+    cfg = replace(
+        make_cfg(transport),
+        topics=TelegramTopicsSettings(enabled=True, scope="all"),
+    )
+    store = TopicStateStore(tmp_path / "topics.json")
+    await store.set_paused(123, 77, True)
+    msg = _msg("/resume", thread_id=77)
+
+    await _handle_resume_command(
+        cfg,
+        msg,
+        store=store,
+        resolved_scope="all",
+        scope_chat_ids=frozenset({msg.chat_id}),
+    )
+
+    text = transport.send_calls[-1]["message"].text
+    assert "topic resumed" in text
+    assert await store.get_paused(msg.chat_id, 77) is False
 
 
 @pytest.mark.anyio

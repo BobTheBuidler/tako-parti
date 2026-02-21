@@ -2132,10 +2132,7 @@ async def test_run_main_loop_includes_manual_quote_block() -> None:
 
     assert runner.calls
     prompt_text, _ = runner.calls[0]
-    assert (
-        prompt_text
-        == "quoted:\n> quoted line\n> second line\nmessage: (empty)"
-    )
+    assert prompt_text == "quoted:\n> quoted line\n> second line\nmessage: (empty)"
     assert runner.calls[1][0] == "hello"
 
 

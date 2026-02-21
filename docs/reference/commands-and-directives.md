@@ -46,12 +46,15 @@ This line is parsed from replies and takes precedence over new directives.
 | `/ctx set <project> @branch` | Update context binding. |
 | `/ctx clear` | Remove context binding. |
 | `/new` | Clear stored sessions for the current scope (topic/chat). |
+| `/pause` | Pause new runs in the current topic (topics enabled). |
+| `/resume` | Resume new runs in the current topic (topics enabled). |
 
 Notes:
 
 - Outside topics, `/ctx` binds the chat context.
 - In topics, `/ctx` binds the topic context.
 - `/new` clears sessions but does **not** clear a bound context.
+- `/pause` only blocks new runs; already queued prompts still run.
 
 ## CLI
 

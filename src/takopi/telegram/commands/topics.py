@@ -265,6 +265,64 @@ async def _handle_chat_new_command(
     await reply(text=text)
 
 
+async def _handle_pause_command(
+    cfg: TelegramBridgeConfig,
+    msg: TelegramIncomingMessage,
+    store: TopicStateStore,
+    *,
+    resolved_scope: str | None = None,
+    scope_chat_ids: frozenset[int] | None = None,
+) -> None:
+    reply = make_reply(cfg, msg)
+    error = _topics_command_error(
+        cfg,
+        msg.chat_id,
+        resolved_scope=resolved_scope,
+        scope_chat_ids=scope_chat_ids,
+    )
+    if error is not None:
+        await reply(text=error)
+        return
+    tkey = _topic_key(msg, cfg, scope_chat_ids=scope_chat_ids)
+    if tkey is None:
+        await reply(text="this command only works inside a topic.")
+        return
+    if await store.get_paused(*tkey):
+        await reply(text="topic already paused.")
+        return
+    await store.set_paused(*tkey, True)
+    await reply(text="topic paused.")
+
+
+async def _handle_resume_command(
+    cfg: TelegramBridgeConfig,
+    msg: TelegramIncomingMessage,
+    store: TopicStateStore,
+    *,
+    resolved_scope: str | None = None,
+    scope_chat_ids: frozenset[int] | None = None,
+) -> None:
+    reply = make_reply(cfg, msg)
+    error = _topics_command_error(
+        cfg,
+        msg.chat_id,
+        resolved_scope=resolved_scope,
+        scope_chat_ids=scope_chat_ids,
+    )
+    if error is not None:
+        await reply(text=error)
+        return
+    tkey = _topic_key(msg, cfg, scope_chat_ids=scope_chat_ids)
+    if tkey is None:
+        await reply(text="this command only works inside a topic.")
+        return
+    if not await store.get_paused(*tkey):
+        await reply(text="topic already active.")
+        return
+    await store.set_paused(*tkey, False)
+    await reply(text="topic resumed.")
+
+
 async def _handle_topic_command(
     cfg: TelegramBridgeConfig,
     msg: TelegramIncomingMessage,

@@ -226,12 +226,15 @@ Commands:
 - `/ctx` shows the bound context and stored session engines inside topics.
   Outside topics, `/ctx set ...` and `/ctx clear` bind the chat context.
 - `/new` inside a topic clears stored resume tokens for that topic.
+- `/pause` blocks new runs in the current topic.
+- `/resume` allows new runs in the current topic.
 
 State is stored in `telegram_topics_state.json` alongside the config file.
 Delete it to reset all topic bindings and stored sessions.
 
 Note: main chat topics do not assume a default project; topics must be bound
 before running without directives.
+Note: `/pause` does not cancel already queued prompts; it only blocks new runs.
 
 ## Outbox model
 
