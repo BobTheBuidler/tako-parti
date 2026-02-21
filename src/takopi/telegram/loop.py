@@ -61,7 +61,7 @@ from .topics import (
     _topics_chat_project,
     _validate_topics_setup,
 )
-from .client import poll_incoming
+from .client import is_group_chat_id, poll_incoming
 from .chat_prefs import ChatPrefsStore, resolve_prefs_path
 from .chat_sessions import ChatSessionStore, resolve_sessions_path
 from .engine_overrides import merge_overrides
@@ -125,7 +125,10 @@ def _allowed_chat_ids(cfg: TelegramBridgeConfig) -> set[int]:
     allowed = set(cfg.chat_ids or ())
     allowed.add(cfg.chat_id)
     allowed.update(cfg.runtime.project_chat_ids())
-    allowed.update(cfg.allowed_user_ids)
+    if cfg.ignore_private_chats:
+        allowed = {chat_id for chat_id in allowed if is_group_chat_id(chat_id)}
+    else:
+        allowed.update(cfg.allowed_user_ids)
     return allowed
 
 
