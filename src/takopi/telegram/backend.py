@@ -111,14 +111,16 @@ class TelegramBackend(TransportBackend):
         settings = _expect_transport_settings(transport_config)
         token = settings.bot_token
         chat_id = settings.chat_id
-        startup_msg = _build_startup_message(
-            runtime,
-            startup_pwd=os.getcwd(),
-            chat_id=chat_id,
-            session_mode=settings.session_mode,
-            show_resume_line=settings.show_resume_line,
-            topics=settings.topics,
-        )
+        startup_msg = ""
+        if not settings.silent_startup:
+            startup_msg = _build_startup_message(
+                runtime,
+                startup_pwd=os.getcwd(),
+                chat_id=chat_id,
+                session_mode=settings.session_mode,
+                show_resume_line=settings.show_resume_line,
+                topics=settings.topics,
+            )
         bot = TelegramClient(token)
         transport = TelegramTransport(bot)
         presenter = TelegramPresenter(message_overflow=settings.message_overflow)

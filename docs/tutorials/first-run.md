@@ -13,7 +13,7 @@ cd ~/dev/your-project
 takopi
 ```
 
-Takopi keeps running in your terminal. In Telegram, your bot will post a startup message like:
+Takopi keeps running in your terminal. In Telegram, your bot will post a startup message like (unless `silent_startup = true`):
 
 !!! takopi "Takopi"
     🐙 takopi is ready
@@ -165,7 +165,7 @@ The agent CLI isn't on your PATH. Install the CLI for the engine you're using (e
 
 **Bot doesn't respond at all**
 
-Check that Takopi is still running in your terminal. You should also see a startup message ("takopi is ready") from the bot in Telegram. If not, restart it.
+Check that Takopi is still running in your terminal. You should also see a startup message ("takopi is ready") from the bot in Telegram unless `silent_startup = true`. If not, restart it.
 
 **Resume doesn't work (starts a new conversation)**
 

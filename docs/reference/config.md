@@ -56,6 +56,7 @@ If you expect to edit config while Takopi is running, set:
 | `voice_transcription_api_key` | string\|null | `null` | Override API key for voice transcription only. |
 | `session_mode` | `"stateless"`\|`"chat"` | `"stateless"` | Auto-resume mode. Onboarding sets `"chat"` for assistant/workspace. |
 | `show_resume_line` | bool | `true` | Show resume line in message footer. Onboarding sets `false` for assistant/workspace. |
+| `silent_startup` | bool | `false` | Suppress the Telegram startup banner on launch/restart. |
 
 When `allowed_user_ids` is set, updates without a sender id (for example, some channel posts) are ignored.
 

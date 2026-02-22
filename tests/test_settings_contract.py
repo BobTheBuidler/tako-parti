@@ -11,13 +11,20 @@ def test_settings_strips_and_expands_transport_config(tmp_path: Path) -> None:
         {
             "transport": " telegram ",
             "plugins": {"enabled": [" foo "]},
-            "transports": {"telegram": {"bot_token": "  token  ", "chat_id": 123}},
+            "transports": {
+                "telegram": {
+                    "bot_token": "  token  ",
+                    "chat_id": 123,
+                    "silent_startup": True,
+                }
+            },
         }
     )
 
     assert settings.transport == "telegram"
     assert settings.plugins.enabled == ["foo"]
     assert settings.transports.telegram.bot_token == "token"
+    assert settings.transports.telegram.silent_startup is True
 
 
 def test_settings_rejects_bool_chat_id(tmp_path: Path) -> None:

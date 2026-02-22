@@ -10,6 +10,16 @@ from .telegram_fakes import FakeTransport, make_cfg
 
 
 @pytest.mark.anyio
+async def test_send_startup_skips_empty_message() -> None:
+    transport = FakeTransport()
+    cfg = replace(make_cfg(transport), startup_msg="   ")
+
+    await _send_startup(cfg)
+
+    assert transport.send_calls == []
+
+
+@pytest.mark.anyio
 async def test_send_startup_single_message_no_followups() -> None:
     transport = FakeTransport()
     cfg = replace(make_cfg(transport), startup_msg="ready")
