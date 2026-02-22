@@ -140,6 +140,7 @@ def test_telegram_backend_build_and_run_wires_config(
     transport_config = TelegramTransportSettings(
         bot_token="token",
         chat_id=321,
+        silent_startup=True,
         allowed_user_ids=[7, 8],
         voice_transcription=True,
         voice_max_bytes=1234,
@@ -161,6 +162,7 @@ def test_telegram_backend_build_and_run_wires_config(
     cfg = captured["cfg"]
     kwargs = captured["kwargs"]
     assert cfg.chat_id == 321
+    assert cfg.startup_msg == ""
     assert cfg.voice_transcription is True
     assert cfg.voice_max_bytes == 1234
     assert cfg.voice_transcription_model == "whisper-1"

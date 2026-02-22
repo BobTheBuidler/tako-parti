@@ -134,6 +134,10 @@ async def _send_startup(cfg: TelegramBridgeConfig) -> None:
     from ..transport import RenderedMessage
     from .render import prepare_telegram_multi
 
+    if not cfg.startup_msg.strip():
+        logger.debug("startup.message.skipped.empty")
+        return
+
     logger.debug("startup.message", text=cfg.startup_msg)
 
     def _split_startup_message(message: str) -> MarkdownParts:
