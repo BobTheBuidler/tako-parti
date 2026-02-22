@@ -145,6 +145,10 @@ def test_onboarding_state_helpers(tmp_path: Path) -> None:
     state.session_mode = "chat"
     assert state.is_stateful is True
 
+    state.session_mode = "steer"
+    state.topics_enabled = False
+    assert state.is_stateful is False
+
     state.session_mode = "stateless"
     state.topics_enabled = True
     assert state.is_stateful is True
@@ -267,6 +271,24 @@ def test_debug_onboarding_paths_prints_table() -> None:
     assert "workspace" in output
     assert "assistant" in output
     assert "handoff" in output
+    assert "steer" in output
+
+
+@pytest.mark.anyio
+async def test_step_persona_handoff_sets_steer(tmp_path: Path) -> None:
+    ui = DummyUI(selects=["handoff"])
+    state = onboarding.OnboardingState(config_path=tmp_path / "cfg", force=False)
+
+    await onboarding.step_persona(
+        cast(onboarding.UI, ui),
+        cast(onboarding.Services, DummyServices()),
+        state,
+    )
+
+    assert state.persona == "handoff"
+    assert state.session_mode == "steer"
+    assert state.topics_enabled is False
+    assert state.show_resume_line is True
 
 
 @pytest.mark.anyio

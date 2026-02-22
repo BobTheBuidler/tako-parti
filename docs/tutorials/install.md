@@ -183,7 +183,7 @@ Each choice automatically configures conversation mode, topics, and resume lines
 |----------|----------|--------------|
 | **assistant** | Single developer, private chat | Chat mode (auto-resume), topics off, resume lines hidden. Use `/new` to start fresh. |
 | **workspace** | Teams, multiple projects/branches | Chat mode, topics on, resume lines hidden. Each topic binds to a repo/branch. |
-| **handoff** | Terminal-based workflow | Stateless (reply-to-continue), resume lines always shown. Copy resume line to terminal. |
+| **handoff** | Terminal-based workflow | Steer mode (reply-to-continue), resume lines always shown. Copy resume line to terminal. `stateless` remains accepted for legacy configs. |
 
 !!! tip "Not sure which to pick?"
     Start with **assistant** (recommended). You can always change settings later in your config file.
@@ -339,7 +339,7 @@ Your config file lives at `~/.takopi/takopi.toml`. The exact contents depend on 
         takopi config set transport "telegram"
         takopi config set transports.telegram.bot_token "..."
         takopi config set transports.telegram.chat_id 123456789
-        takopi config set transports.telegram.session_mode "stateless"
+        takopi config set transports.telegram.session_mode "steer"
         takopi config set transports.telegram.show_resume_line true
         takopi config set transports.telegram.topics.enabled false
         takopi config set transports.telegram.topics.scope "auto"
@@ -354,7 +354,7 @@ Your config file lives at `~/.takopi/takopi.toml`. The exact contents depend on 
         [transports.telegram]
         bot_token = "..."
         chat_id = 123456789
-        session_mode = "stateless"  # reply-to-continue
+        session_mode = "steer"      # reply-to-continue ("stateless" is legacy-compatible)
         show_resume_line = true     # always show resume lines
 
         [transports.telegram.topics]

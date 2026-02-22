@@ -130,9 +130,9 @@ Configuration (under `[transports.telegram]`):
 
 ## Chat sessions (optional)
 
-If you chose the **handoff** workflow during onboarding, Takopi uses stateless mode
+If you chose the **handoff** workflow during onboarding, Takopi uses steer mode
 where you reply to continue a session. The **assistant** and **workspace** workflows
-use chat mode with auto-resume enabled.
+use chat mode with auto-resume enabled. `stateless` remains accepted as a legacy-compatible value.
 
 Configuration (under `[transports.telegram]`):
 
@@ -147,7 +147,7 @@ Configuration (under `[transports.telegram]`):
 
     ```toml
     show_resume_line = true # set false to hide resume lines
-    session_mode = "chat" # or "stateless"
+    session_mode = "chat" # chat | steer | stateless (legacy)
     ```
 
 Behavior:

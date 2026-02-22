@@ -176,6 +176,24 @@ def test_transport_config_telegram_and_extra(tmp_path: Path) -> None:
         settings.transport_config("discord", config_path=config_path)
 
 
+@pytest.mark.parametrize("session_mode", ["steer", "stateless"])
+def test_telegram_session_mode_accepts_steer_and_stateless(session_mode: str) -> None:
+    settings = TakopiSettings.model_validate(
+        {
+            "transport": "telegram",
+            "transports": {
+                "telegram": {
+                    "bot_token": "token",
+                    "chat_id": 123,
+                    "session_mode": session_mode,
+                }
+            },
+        }
+    )
+
+    assert settings.transports.telegram.session_mode == session_mode
+
+
 def test_bot_token_none_rejected(tmp_path: Path) -> None:
     config_path = tmp_path / "takopi.toml"
     data = {

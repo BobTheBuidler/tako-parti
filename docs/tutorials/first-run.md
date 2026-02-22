@@ -88,7 +88,7 @@ How you continue depends on your mode.
 
 Use `/new` any time you want a fresh thread.
 
-**If you're in stateless mode:** **reply** to a message that has a resume line.
+**If you're in steer mode:** **reply** to a message that has a resume line.
 
 !!! takopi "Takopi"
     done · codex · 11s · step 5
@@ -97,6 +97,8 @@ Use `/new` any time you want a fresh thread.
         what command line arguments does it support?
 
 Takopi extracts the resume token from the message you replied to and continues the same agent session.
+
+`session_mode = "stateless"` is still supported for backward compatibility and follows the same reply-to-continue behavior as `steer`.
 
 !!! tip "Reply-to-continue still works in chat mode"
     If resume lines are visible, replying to any older message branches the conversation from that point.
@@ -151,7 +153,7 @@ Key points:
 - The agent streams JSONL events (tool calls, progress, answer)
 - Takopi renders these as an editable progress message
 - When done, the progress message is replaced with the final answer
-- Chat mode auto-resumes; resume lines let you reply to branch
+- Chat mode auto-resumes; steer/stateless keep continuation explicit via replies
 
 ## Troubleshooting
 
@@ -169,7 +171,7 @@ Check that Takopi is still running in your terminal. You should also see a start
 
 **Resume doesn't work (starts a new conversation)**
 
-Make sure you're **replying** to a message that contains a resume line. If you hid resume lines (`show_resume_line = false`), turn them on or use chat mode to continue by sending another message.
+Make sure you're **replying** to a message that contains a resume line. If you hid resume lines (`show_resume_line = false`), turn them on or switch to chat mode for send-to-continue behavior.
 
 ## Next
 

@@ -1,6 +1,6 @@
 # Routing & sessions
 
-Takopi supports both **stateless** and **chat** modes for session handling. In stateless mode, each message starts a new session unless you reply to continue. In chat mode, new messages auto-resume the previous session.
+Takopi supports **chat**, **steer**, and **stateless** modes for session handling. In chat mode, new messages auto-resume the previous session. In steer mode, continuation is explicit via reply-to-continue. `stateless` is kept for legacy compatibility and follows steer behavior.
 
 ## Continuation (how threads persist)
 
@@ -22,6 +22,7 @@ Takopi supports three ways to continue a thread:
    - Reset with `/new`.
 
 Reply-to-continue works even if topics or chat sessions are enabled.
+Use `session_mode = "steer"` for reply-driven continuation without chat-session auto-resume (`"stateless"` remains a legacy-compatible synonym).
 
 ## Routing (how Takopi picks a runner)
 

@@ -1,6 +1,6 @@
 # Conversation modes
 
-Takopi can handle follow-up messages in two ways: **chat mode** (auto-resume) or **stateless** (reply-to-continue).
+Takopi supports three session modes: **chat** (auto-resume), **steer** (explicit reply-driven continuation), and **stateless** (legacy-compatible).
 
 During [onboarding](install.md), you chose a **workflow** (assistant, workspace, or handoff) that automatically configured this for you:
 
@@ -8,7 +8,7 @@ During [onboarding](install.md), you chose a **workflow** (assistant, workspace,
 |----------|--------------|--------|--------------|
 | **assistant** | chat | off | hidden |
 | **workspace** | chat | on | hidden |
-| **handoff** | stateless | off | shown |
+| **handoff** | steer | off | shown |
 
 This page explains what those settings mean and how to change them.
 
@@ -40,7 +40,7 @@ To pin a project or branch for the chat, use:
 
 Tip: set a default engine for this chat with `/agent set claude`.
 
-## Stateless (reply-to-continue)
+## Steer (reply-to-continue)
 
 **What it feels like:** every message is independent until you reply.
 
@@ -60,6 +60,8 @@ To continue the same session, **reply** to a message with a resume line:
     !!! user "You"
         now add tests
 
+`session_mode = "stateless"` is still accepted for backward compatibility and behaves like steer.
+
 ## Changing your settings
 
 You can manually change these settings in your config file:
@@ -67,16 +69,16 @@ You can manually change these settings in your config file:
 === "takopi config"
 
     ```sh
-    takopi config set transports.telegram.session_mode "chat"
-    takopi config set transports.telegram.show_resume_line false
+    takopi config set transports.telegram.session_mode "steer"
+    takopi config set transports.telegram.show_resume_line true
     ```
 
 === "toml"
 
     ```toml
     [transports.telegram]
-    session_mode = "chat"      # "chat" or "stateless"
-    show_resume_line = false   # true or false
+    session_mode = "steer"     # chat | steer | stateless (legacy)
+    show_resume_line = true    # true or false
     ```
 
 Or re-run onboarding to pick a different workflow:

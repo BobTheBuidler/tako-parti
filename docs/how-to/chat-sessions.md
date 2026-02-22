@@ -19,10 +19,12 @@ If you chose **handoff** during onboarding and want to switch to chat mode:
 
     ```toml
     [transports.telegram]
-    session_mode = "chat" # stateless | chat
+    session_mode = "chat" # chat | steer | stateless (legacy)
     ```
 
 With `session_mode = "chat"`, new messages in the chat continue the current thread automatically.
+
+Use `session_mode = "steer"` for explicit reply-to-continue behavior without chat-session auto-resume. `stateless` remains accepted as a legacy-compatible value.
 
 ## Reset a session
 
