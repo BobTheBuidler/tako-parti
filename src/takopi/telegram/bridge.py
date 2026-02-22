@@ -119,7 +119,7 @@ class TelegramBridgeConfig:
     chat_id: int
     startup_msg: str
     exec_cfg: ExecBridgeConfig
-    session_mode: Literal["stateless", "chat"] = "stateless"
+    session_mode: Literal["stateless", "chat", "steer"] = "stateless"
     show_resume_line: bool = True
     voice_transcription: bool = False
     voice_max_bytes: int = 10 * 1024 * 1024

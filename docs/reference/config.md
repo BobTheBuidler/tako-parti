@@ -54,7 +54,7 @@ If you expect to edit config while Takopi is running, set:
 | `voice_transcription_model` | string | `"gpt-4o-mini-transcribe"` | OpenAI transcription model name. |
 | `voice_transcription_base_url` | string\|null | `null` | Override base URL for voice transcription only. |
 | `voice_transcription_api_key` | string\|null | `null` | Override API key for voice transcription only. |
-| `session_mode` | `"stateless"`\|`"chat"` | `"stateless"` | Auto-resume mode. Onboarding sets `"chat"` for assistant/workspace. |
+| `session_mode` | `"chat"`\|`"steer"`\|`"stateless"` | `"stateless"` | Session continuation mode. `"chat"` enables auto-resume, `"steer"` keeps continuation reply-driven, and `"stateless"` is legacy-compatible with steer semantics. Onboarding sets `"chat"` for assistant/workspace and `"steer"` for handoff. |
 | `show_resume_line` | bool | `true` | Show resume line in message footer. Onboarding sets `false` for assistant/workspace. |
 | `silent_startup` | bool | `false` | Suppress the Telegram startup banner on launch/restart. |
 

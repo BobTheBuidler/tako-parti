@@ -44,7 +44,7 @@ def test_build_startup_message_includes_missing_engines(tmp_path: Path) -> None:
         runtime,
         startup_pwd=str(tmp_path),
         chat_id=123,
-        session_mode="stateless",
+        session_mode="steer",
         show_resume_line=True,
         topics=TelegramTopicsSettings(),
     )
@@ -52,6 +52,7 @@ def test_build_startup_message_includes_missing_engines(tmp_path: Path) -> None:
     assert "takopi is ready" in message
     assert "engines: `codex (not installed: pi)`" in message
     assert "projects: `none`" in message
+    assert "mode: `steer`" in message
 
 
 def test_build_startup_message_surfaces_unavailable_engine_reasons(

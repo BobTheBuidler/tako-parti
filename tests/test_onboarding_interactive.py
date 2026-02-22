@@ -146,6 +146,42 @@ def test_interactive_setup_writes_config(monkeypatch, tmp_path) -> None:
     assert 'default_engine = "codex"' in saved
 
 
+def test_interactive_setup_handoff_writes_steer_mode(monkeypatch, tmp_path) -> None:
+    config_path = tmp_path / "takopi.toml"
+    monkeypatch.setattr(onboarding, "HOME_CONFIG_PATH", config_path)
+
+    backend = EngineBackend(id="codex", build_runner=lambda _cfg, _path: None)
+    monkeypatch.setattr(onboarding, "list_backends", lambda: [backend])
+    monkeypatch.setattr(onboarding.shutil, "which", lambda _cmd: "/usr/bin/codex")
+
+    monkeypatch.setattr(onboarding, "confirm_prompt", queue_values([True, True]))
+    monkeypatch.setattr(
+        onboarding.questionary, "password", queue_answers(["123456789:ABCdef"])
+    )
+    monkeypatch.setattr(
+        onboarding.questionary,
+        "select",
+        queue_answers(["handoff", "codex"]),
+    )
+    patch_live_services(
+        monkeypatch,
+        bot=User(id=1, username="my_bot"),
+        chat=onboarding.ChatInfo(
+            chat_id=123,
+            username="alice",
+            title=None,
+            first_name="Alice",
+            last_name=None,
+            chat_type="private",
+        ),
+    )
+
+    assert anyio.run(partial(onboarding.interactive_setup, force=False)) is True
+    saved = config_path.read_text(encoding="utf-8")
+    assert 'session_mode = "steer"' in saved
+    assert "show_resume_line = true" in saved
+
+
 def test_interactive_setup_preserves_projects(monkeypatch, tmp_path) -> None:
     config_path = tmp_path / "takopi.toml"
     config_path.write_text(

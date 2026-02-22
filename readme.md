@@ -15,7 +15,7 @@ telegram bridge for codex, claude code, opencode, pi. manage multiple projects a
 ## features
 
 - projects and worktrees: work on multiple repos/branches simultaneously, branches are git worktrees
-- stateless resume: continue in chat or copy the resume line to pick up in terminal
+- session modes: chat (auto-resume), steer (reply-driven continuation), stateless (legacy-compatible)
 - progress streaming: commands, tools, file changes, elapsed time
 - parallel runs across agent sessions, per-agent-session queue
 - works with telegram features like voice notes and scheduled messages
@@ -50,7 +50,7 @@ workflows configure conversation mode, topics, and resume lines automatically:
 
 - **assistant**: ongoing chat with auto-resume (recommended)
 - **workspace**: forum topics bound to repos/branches
-- **handoff**: reply-to-continue with terminal resume lines
+- **handoff**: steer mode (reply-to-continue) with terminal resume lines
 
 ## usage
 
@@ -78,4 +78,3 @@ see [`docs/how-to/write-a-plugin.md`](docs/how-to/write-a-plugin.md) and [`docs/
 ## development
 
 see [`docs/reference/specification.md`](docs/reference/specification.md) and [`docs/developing.md`](docs/developing.md).
-

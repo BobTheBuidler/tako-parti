@@ -55,7 +55,7 @@ __all__ = [
 ]
 
 TopicScope = Literal["auto", "main", "projects", "all"]
-SessionMode = Literal["chat", "stateless"]
+SessionMode = Literal["chat", "steer", "stateless"]
 Persona = Literal["workspace", "assistant", "handoff"]
 
 
@@ -822,7 +822,7 @@ async def step_persona(ui: UI, _svc: Services, state: OnboardingState) -> None:
         state.topics_scope = "auto"
         state.show_resume_line = False
         return
-    state.session_mode = "stateless"
+    state.session_mode = "steer"
     state.topics_enabled = False
     state.topics_scope = "auto"
     state.show_resume_line = True
@@ -1047,7 +1047,7 @@ def debug_onboarding_paths(console: Console | None = None) -> None:
     personas = {
         "workspace": ("chat", True, "hide"),
         "assistant": ("chat", False, "hide"),
-        "handoff": ("stateless", False, "show (fixed)"),
+        "handoff": ("steer", False, "show (fixed)"),
     }
     for persona, (session_mode, topics_enabled, resume_label) in personas.items():
         topics_label = "on" if topics_enabled else "off"

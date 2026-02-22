@@ -36,7 +36,7 @@ def _build_startup_message(
     *,
     startup_pwd: str,
     chat_id: int,
-    session_mode: Literal["stateless", "chat"],
+    session_mode: Literal["stateless", "chat", "steer"],
     show_resume_line: bool,
     topics: TelegramTopicsSettings,
 ) -> str:
