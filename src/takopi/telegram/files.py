@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import base64
 import io
+import mimetypes
 import os
 import shlex
 import tempfile
@@ -18,6 +20,7 @@ __all__ = [
     "normalize_relative_path",
     "parse_file_command",
     "parse_file_prompt",
+    "render_image_attachment",
     "resolve_path_within_root",
     "split_command_args",
     "write_bytes_atomic",
@@ -142,6 +145,36 @@ def write_bytes_atomic(path: Path, payload: bytes) -> None:
         handle.write(payload)
         temp_name = handle.name
     Path(temp_name).replace(path)
+
+
+def render_image_attachment(
+    path: Path,
+    *,
+    mime_type: str | None = None,
+    max_bytes: int | None = 1024 * 1024,
+) -> str | None:
+    if mime_type is not None and mime_type.startswith("image/"):
+        mime = mime_type
+    else:
+        guessed, _ = mimetypes.guess_type(path.name)
+        if guessed is None or not guessed.startswith("image/"):
+            return None
+        mime = guessed
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return None
+    if max_bytes is not None and size > max_bytes:
+        return None
+    try:
+        payload = path.read_bytes()
+    except OSError:
+        return None
+    if max_bytes is not None and len(payload) > max_bytes:
+        return None
+    encoded = base64.b64encode(payload).decode("ascii")
+    name = path.name or "upload"
+    return f"![{name}](data:{mime};base64,{encoded})"
 
 
 class ZipTooLargeError(Exception):
