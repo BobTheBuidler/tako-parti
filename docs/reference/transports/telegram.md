@@ -128,6 +128,25 @@ Configuration (under `[transports.telegram]`):
     forward_coalesce_s = 1.0 # set 0 to disable the delay
     ```
 
+## File commands
+
+`/file get` is gated by `transports.telegram.files.allow_get` (default `true`). When `false`, the command is disabled and the usage text only lists `/file put`.
+
+Configuration (under `[transports.telegram.files]`):
+
+=== "takopi config"
+
+    ```sh
+    takopi config set transports.telegram.files.allow_get false
+    ```
+
+=== "toml"
+
+    ```toml
+    [transports.telegram.files]
+    allow_get = false
+    ```
+
 ## Chat sessions (optional)
 
 If you chose the **handoff** workflow during onboarding, Takopi uses steer mode

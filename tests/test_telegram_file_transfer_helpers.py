@@ -591,6 +591,35 @@ async def test_handle_file_command_routes(monkeypatch) -> None:
 
 
 @pytest.mark.anyio
+async def test_handle_file_command_blocks_get_when_disabled(monkeypatch) -> None:
+    transport = FakeTransport()
+    files = TelegramFilesSettings(enabled=True, allow_get=False)
+    cfg = replace(make_cfg(transport), files=files)
+    msg = _msg("/file")
+    calls: dict[str, int] = {"get": 0}
+
+    async def _fake_get(*_args, **_kwargs) -> None:
+        calls["get"] += 1
+
+    monkeypatch.setattr(transfer, "_handle_file_get", _fake_get)
+
+    await transfer._handle_file_command(
+        cfg,
+        msg,
+        "get downloads/report.txt",
+        ambient_context=None,
+        topic_store=None,
+    )
+
+    assert calls["get"] == 0
+    assert transport.send_calls
+    text = transport.send_calls[-1]["message"].text
+    assert "file downloads are disabled" in text
+    assert "usage: /file put <path>" in text
+    assert "get <path>" not in text
+
+
+@pytest.mark.anyio
 async def test_handle_file_command_invalid_usage() -> None:
     transport = FakeTransport()
     cfg = make_cfg(transport)

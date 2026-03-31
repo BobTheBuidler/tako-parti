@@ -14,6 +14,7 @@ from ..files import (
     default_upload_name,
     default_upload_path,
     deny_reason,
+    file_usage,
     format_bytes,
     normalize_relative_path,
     parse_file_command,
@@ -290,9 +291,16 @@ async def _handle_file_command(
     topic_store: TopicStateStore | None,
 ) -> None:
     reply = make_reply(cfg, msg)
-    command, rest, error = parse_file_command(args_text)
+    command, rest, error = parse_file_command(
+        args_text, allow_get=cfg.files.allow_get
+    )
     if error is not None:
         await reply(text=error)
+        return
+    if command == "get" and not cfg.files.allow_get:
+        await reply(
+            text=f"file downloads are disabled.\n\n{file_usage(allow_get=False)}"
+        )
         return
     if command == "put":
         await _handle_file_put(cfg, msg, rest, ambient_context, topic_store)
